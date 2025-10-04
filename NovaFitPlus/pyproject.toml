@@ -1,0 +1,20 @@
+
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "novafit-plus"
+version = "0.1.0"
+description = "Health + Weather + Hydration tracker (CLI + Tkinter GUI)"
+requires-python = ">=3.9"
+dependencies = [
+  "requests>=2.31.0",
+  "faker>=24.0.0",
+  "openpyxl>=3.1.0",
+  "matplotlib>=3.8.0"
+]
+
+[project.scripts]
+novafit-cli = "novafit_plus.app:main"
+novafit-gui = "novafit_plus.ui_tk:main"
