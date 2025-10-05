@@ -35,6 +35,8 @@ SCHEMA = [
         sleep_hours REAL,
         FOREIGN KEY(user_id) REFERENCES users(id)
     );''',
+    '''CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_user_date
+        ON activities(user_id, date);''',
     '''CREATE TABLE IF NOT EXISTS weather (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,
@@ -84,6 +86,23 @@ def migrate_schema(db_path: str):
                 cur.execute("ALTER TABLE activities ADD COLUMN sleep_hours REAL")
             except Exception:
                 pass
+        cur.execute("PRAGMA index_list(activities)")
+        indexes = {row[1] for row in cur.fetchall()}
+        if "idx_activities_user_date" not in indexes:
+            cur.execute(
+                """
+                DELETE FROM activities
+                WHERE id NOT IN (
+                    SELECT MIN(id) FROM activities GROUP BY user_id, date
+                )
+                """
+            )
+            cur.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_user_date
+                    ON activities(user_id, date)
+                """
+            )
 
 def upsert_user(db_path: str, name: str, age: int, sex: str, height_cm: float, weight_kg: float, activity_level: str):
     with get_conn(db_path) as c:
@@ -107,7 +126,13 @@ def upsert_activity(db_path: str, user_name: str, date: str, steps: int, calorie
         user_id = cur.fetchone()[0]
         cur.execute(
             '''INSERT INTO activities(user_id, date, steps, calories, mood, notes, sleep_hours)
-               VALUES(?,?,?,?,?,?,?)''',
+               VALUES(?,?,?,?,?,?,?)
+               ON CONFLICT(user_id, date) DO UPDATE SET
+                   steps=excluded.steps,
+                   calories=excluded.calories,
+                   mood=excluded.mood,
+                   notes=excluded.notes,
+                   sleep_hours=excluded.sleep_hours''',
             (user_id, date, steps, calories, mood, notes, sleep_hours)
         )
 

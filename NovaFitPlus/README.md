@@ -32,6 +32,12 @@ python -m novafit_plus.ui_tk        # GUI
 9) Tail last rows
 0) Exit
 
+## Manual QA Checklist
+- Ensure the database is initialized by running `python -m novafit_plus.app` and seeding demo data if needed.
+- Log an activity for today via the CLI, then repeat the same option with different values for steps or notes to overwrite the entry.
+- Use option `9) Tail last rows` targeting the `activities` table to confirm only one record exists for the user/date pair and that it reflects the updated values.
+- Run the seeding helper twice (e.g., `python -m novafit_plus.seed`) or re-run option `8)` to observe the `[seed] Re-logged activity...` message confirming a single row per day.
+
 ### Health Score and Sleep Percentages
 - Dashboard shows **Weekly** and **Monthly** sleep percentages vs. an 8-hour target.
 - A **Health Score (7 days)** combines steps, hydration, sleep and mood, with a small BMI adjustment. Scale 0–100.
