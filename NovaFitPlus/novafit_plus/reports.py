@@ -1,5 +1,6 @@
 
 import os, datetime as dt
+from typing import Tuple
 import matplotlib
 matplotlib.use('Agg')  # headless
 import matplotlib.pyplot as plt
@@ -9,7 +10,7 @@ from .analysis import kpis
 
 def ensure_dir(p): os.makedirs(p, exist_ok=True); return p
 
-def chart_hydration(db_path: str, user_name: str, weight_kg: float, days: int = 14, outdir: str = "exports/charts") -> str:
+def chart_hydration(db_path: str, user_name: str, weight_kg: float, days: int = 14, outdir: str = "exports/charts") -> Tuple[str, str]:
     ensure_dir(outdir)
     start = dt.date.today() - dt.timedelta(days=days-1)
     dates, goals, totals, pcts = [], [], [], []
@@ -22,15 +23,27 @@ def chart_hydration(db_path: str, user_name: str, weight_kg: float, days: int = 
             tot = int(cur.fetchone()[0] or 0)
             pct = 0 if goal <= 0 else round(tot*100/goal, 1)
             dates.append(d); goals.append(goal); totals.append(tot); pcts.append(pct)
-    # One plot: pct over time
     plt.figure()
     plt.plot(dates, pcts, marker='o')
     plt.xticks(rotation=45, ha='right')
+    plt.ylabel("% of goal")
     plt.title("Hydration adherence (%)")
     plt.tight_layout()
-    path = os.path.join(outdir, "hydration_pct.png")
-    plt.savefig(path); plt.close()
-    return path
+    pct_path = os.path.join(outdir, "hydration_pct.png")
+    plt.savefig(pct_path); plt.close()
+
+    plt.figure()
+    plt.plot(dates, totals, marker='o', label="Actual intake (ml)")
+    plt.plot(dates, goals, marker='s', label="Goal (ml)")
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel("Milliliters")
+    plt.title("Hydration goal vs actual")
+    plt.legend()
+    plt.tight_layout()
+    comparison_path = os.path.join(outdir, "hydration_goal_vs_actual.png")
+    plt.savefig(comparison_path); plt.close()
+
+    return pct_path, comparison_path
 
 def chart_steps_vs_sleep(db_path: str, user_name: str, days: int = 14, outdir: str = "exports/charts") -> str:
     ensure_dir(outdir)

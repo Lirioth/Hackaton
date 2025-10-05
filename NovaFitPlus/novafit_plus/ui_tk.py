@@ -285,13 +285,13 @@ def main(config_path: Optional[str] = None):
             days = int(rep_days_var.get() or 14)
             u = get_user(db, user_var.get().strip() or default_user) or (None, default_user, 30, 'M', 166, 66, 'light')
             _, _, _, _, h, w, _ = u
-            p1 = chart_hydration(db, user_var.get().strip() or default_user, w, days)
+            pct_path, comparison_path = chart_hydration(db, user_var.get().strip() or default_user, w, days)
             p2 = chart_steps_vs_sleep(db, user_var.get().strip() or default_user, days)
-            txt_rep.delete('1.0', tk.END); txt_rep.insert(tk.END, f"Charts saved:\n{p1}\n{p2}")
+            txt_rep.delete('1.0', tk.END); txt_rep.insert(tk.END, f"Charts saved:\n{pct_path}\n{comparison_path}\n{p2}")
             # Try to preview the last chart
             try:
                 from tkinter import PhotoImage
-                img = PhotoImage(file=p1)
+                img = PhotoImage(file=comparison_path)
                 img_label.configure(image=img)
                 img_label.image = img
             except Exception:
