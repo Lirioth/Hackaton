@@ -12,12 +12,16 @@ from .analysis import kpis, best_running_days, hydration_adherence, sleep_stats,
 from .export import export_json, export_excel, export_csv
 from .reports import chart_hydration, chart_steps_vs_sleep
 
+
+def _default_profile(name: str):
+    return (None, name, 30, "M", 166, 66, "light", "", "")
+
 def _ensure(db):
     migrate_schema(db)
 
 def dashboard_text(db, user):
-    u = get_user(db, user) or (None, user, 30, "M", 166, 66, "light")
-    _, name, age, sex, h, w, al = u
+    u = get_user(db, user) or _default_profile(user)
+    _, name, age, sex, h, w, al, city, country = u
     b, cat = bmi(w, h)
     bmr = bmr_mifflin(age, sex, h, w)
     maint = maintenance_calories(bmr, al)
@@ -31,6 +35,7 @@ def dashboard_text(db, user):
 
     lines = [
         f"User: {name} | Age: {age} | Sex: {sex} | Activity: {al}",
+        (f"Location: {', '.join([part for part in (city, country) if part])}" if (city or country) else "Location: not set"),
         f"Height: {h} cm | Weight: {w} kg | BMI: {b} ({cat})",
         f"BMR: {bmr} kcal | Maintenance: {maint} kcal",
         f"Hydration: {total}/{goal} ml",
@@ -50,6 +55,18 @@ def main(config_path: Optional[str] = None):
     db = cfg["db_path"]
     _ensure(db)
     default_user = "Kevin"
+    profile_defaults = get_user(db, default_user) or _default_profile(default_user)
+    (
+        _,
+        init_name,
+        init_age,
+        init_sex,
+        init_h,
+        init_w,
+        init_al,
+        init_city,
+        init_country,
+    ) = profile_defaults
 
     root = tk.Tk()
     root.title("NovaFit Plus — GUI")
@@ -85,7 +102,7 @@ def main(config_path: Optional[str] = None):
     nb = ttk.Notebook(root)
     nb.pack(fill="both", expand=True)
 
-    user_var = tk.StringVar(value=default_user)
+    user_var = tk.StringVar(value=init_name or default_user)
 
     # Dashboard
     tab_dash = ttk.Frame(nb, padding=10); nb.add(tab_dash, text="Dashboard")
@@ -125,8 +142,8 @@ def main(config_path: Optional[str] = None):
         w7 = sleep_stats(db, user_var.get().strip() or default_user, days=7)
         sleep_pct = int(w7["percent_vs_8h"]) if w7 else 0
         sleep_pb["value"] = sleep_pct; lbl_sleep.config(text=f"{sleep_pct}%")
-        u = get_user(db, user_var.get().strip() or default_user) or (None, default_user, 30, 'M', 166, 66, 'light')
-        _, _, _, _, h, w, _ = u
+        u = get_user(db, user_var.get().strip() or default_user) or _default_profile(default_user)
+        _, _, _, _, h, w, _, _, _ = u
         hs = health_score(db, user_var.get().strip() or default_user, w, h, days=7)
         health_pb['value'] = int(hs['score'])
         lbl_score.config(text=f"{hs['score']}")
@@ -138,7 +155,16 @@ def main(config_path: Optional[str] = None):
     ttk.Button(btns, text="Refresh", command=refresh_dashboard).pack(side="left", padx=4)
     ttk.Button(btns, text="Water +250 ml", command=lambda: quick_add(250)).pack(side="left", padx=4)
     ttk.Button(btns, text="Water +500 ml", command=lambda: quick_add(500)).pack(side="left", padx=4)
-    ttk.Button(btns, text="Fetch Today's Weather", command=lambda: fetch_today_weather(db, cfg, refresh_dashboard)).pack(side="right", padx=4)
+    ttk.Button(
+        btns,
+        text="Fetch Today's Weather",
+        command=lambda: fetch_today_weather(
+            db,
+            cfg,
+            user_var.get().strip() or default_user,
+            refresh_dashboard,
+        ),
+    ).pack(side="right", padx=4)
 
     # Activity tab
     tab_act = ttk.Frame(nb, padding=10); nb.add(tab_act, text="Activity")
@@ -175,11 +201,24 @@ def main(config_path: Optional[str] = None):
 
     # Weather tab
     tab_w = ttk.Frame(nb, padding=10); nb.add(tab_w, text="Weather")
-    city_var = tk.StringVar(value=cfg.get("default_city", "")); country_var = tk.StringVar(value=cfg.get("default_country","")); days_var = tk.StringVar(value="3")
+    city_var = tk.StringVar(value=init_city or cfg.get("default_city", ""))
+    country_var = tk.StringVar(value=init_country or cfg.get("default_country", ""))
+    days_var = tk.StringVar(value="3")
     for i, (label, var) in enumerate([("City", city_var), ("Country", country_var), ("Days (1-7)", days_var)]):
         ttk.Label(tab_w, text=label).grid(row=0, column=2*i, sticky="e", padx=4, pady=4)
         ttk.Entry(tab_w, textvariable=var, width=16).grid(row=0, column=2*i+1, sticky="w", padx=4, pady=4)
-    ttk.Button(tab_w, text="Fetch Forecast", command=lambda: fetch_forecast(db, city_var.get(), country_var.get(), days_var.get())).grid(row=1, column=0, columnspan=6, pady=6)
+    ttk.Button(
+        tab_w,
+        text="Fetch Forecast",
+        command=lambda: fetch_forecast(
+            db,
+            cfg,
+            user_var.get().strip() or default_user,
+            city_var.get(),
+            country_var.get(),
+            days_var.get(),
+        ),
+    ).grid(row=1, column=0, columnspan=6, pady=6)
 
     # Insights tab
     tab_ins = ttk.Frame(nb, padding=10); nb.add(tab_ins, text='Insights')
@@ -209,8 +248,8 @@ def main(config_path: Optional[str] = None):
 
     def generate_insights():
         period = int(tf_var.get() or '7')
-        u = get_user(db, user_var.get().strip() or default_user) or (None, default_user, 30, 'M', 166, 66, 'light')
-        _, _, _, _, h, w, al = u
+        u = get_user(db, user_var.get().strip() or default_user) or _default_profile(default_user)
+        _, _, _, _, h, w, _, _, _ = u
         # Health score
         hs = health_score(db, user_var.get().strip() or default_user, w, h, days=period)
         score = hs.get('score', 0)
@@ -261,8 +300,8 @@ def main(config_path: Optional[str] = None):
             for d, cond, score in best_running_days(db, days):
                 lines.append(f"  {d} — {cond} — Score {score}")
             lines.append("Hydration adherence (7 days):")
-            u = get_user(db, user_var.get().strip() or default_user) or (None, default_user, 30, "M", 166, 66, "light")
-            _, _, _, _, h, w, _ = u
+            u = get_user(db, user_var.get().strip() or default_user) or _default_profile(default_user)
+            _, _, _, _, h, w, _, _, _ = u
             rep = hydration_adherence(db, user_var.get().strip() or default_user, w, days=7)
             for row in rep:
                 lines.append(f"  {row}")
@@ -283,8 +322,8 @@ def main(config_path: Optional[str] = None):
     def gen_charts():
         try:
             days = int(rep_days_var.get() or 14)
-            u = get_user(db, user_var.get().strip() or default_user) or (None, default_user, 30, 'M', 166, 66, 'light')
-            _, _, _, _, h, w, _ = u
+            u = get_user(db, user_var.get().strip() or default_user) or _default_profile(default_user)
+            _, _, _, _, h, w, _, _, _ = u
             p1 = chart_hydration(db, user_var.get().strip() or default_user, w, days)
             p2 = chart_steps_vs_sleep(db, user_var.get().strip() or default_user, days)
             txt_rep.delete('1.0', tk.END); txt_rep.insert(tk.END, f"Charts saved:\n{p1}\n{p2}")
@@ -317,15 +356,44 @@ def main(config_path: Optional[str] = None):
 
     # Profile tab
     tab_prof = ttk.Frame(nb, padding=10); nb.add(tab_prof, text="Profile")
-    name_var = tk.StringVar(value=default_user); age_var = tk.StringVar(value="30"); sex_var = tk.StringVar(value="M"); ht_var = tk.StringVar(value="166"); wt_var = tk.StringVar(value="66"); actl_var = tk.StringVar(value="light")
+    name_var = tk.StringVar(value=init_name or default_user)
+    age_var = tk.StringVar(value=str(init_age if init_age is not None else 30))
+    sex_var = tk.StringVar(value=init_sex or "M")
+    ht_var = tk.StringVar(value=str(init_h if init_h is not None else 166))
+    wt_var = tk.StringVar(value=str(init_w if init_w is not None else 66))
+    actl_var = tk.StringVar(value=init_al or "light")
+    city_prof_var = tk.StringVar(value=init_city or "")
+    country_prof_var = tk.StringVar(value=init_country or "")
     grid = ttk.Frame(tab_prof); grid.pack(fill="x")
-    for i, (lab, var) in enumerate([("Name", name_var), ("Age", age_var), ("Sex", sex_var), ("Height cm", ht_var), ("Weight kg", wt_var), ("Activity level", actl_var)]):
+    for i, (lab, var) in enumerate([
+        ("Name", name_var),
+        ("Age", age_var),
+        ("Sex", sex_var),
+        ("Height cm", ht_var),
+        ("Weight kg", wt_var),
+        ("Activity level", actl_var),
+        ("City", city_prof_var),
+        ("Country", country_prof_var),
+    ]):
         ttk.Label(grid, text=lab).grid(row=i, column=0, sticky="e", padx=4, pady=4)
         ttk.Entry(grid, textvariable=var, width=20).grid(row=i, column=1, sticky="w", padx=4, pady=4)
     def save_profile():
         try:
-            upsert_user(db, name_var.get().strip() or default_user, int(age_var.get() or 30), sex_var.get().strip() or "M", float(ht_var.get() or 166), float(wt_var.get() or 66), actl_var.get().strip() or "light")
-            user_var.set(name_var.get().strip() or default_user)
+            name = name_var.get().strip() or default_user
+            age = int(age_var.get().strip() or init_age)
+            sex = sex_var.get().strip() or "M"
+            height = float(ht_var.get().strip() or init_h)
+            weight = float(wt_var.get().strip() or init_w)
+            activity = (actl_var.get().strip() or "light").lower()
+            city_val = city_prof_var.get().strip()
+            country_val = country_prof_var.get().strip()
+            upsert_user(db, name, age, sex, height, weight, activity, city_val, country_val)
+            user_var.set(name)
+            actl_var.set(activity)
+            city_prof_var.set(city_val)
+            country_prof_var.set(country_val)
+            city_var.set(city_val or cfg.get("default_city", ""))
+            country_var.set(country_val or cfg.get("default_country", ""))
             messagebox.showinfo("Saved", "Profile updated.")
             refresh_dashboard()
         except Exception as e:
@@ -333,9 +401,12 @@ def main(config_path: Optional[str] = None):
     ttk.Button(tab_prof, text="Save Profile", command=save_profile).pack(anchor="w", pady=6)
 
     # Helpers
-    def fetch_today_weather(db, cfg, cb):
+    def fetch_today_weather(db, cfg, user_name, cb):
         try:
-            lat, lon, cname = wz.geocode_city(cfg["default_city"], cfg["default_country"])
+            profile = get_user(db, user_name) or _default_profile(user_name)
+            city = (profile[7] or "").strip() or cfg.get("default_city", "")
+            country = (profile[8] or "").strip() or cfg.get("default_country", "")
+            lat, lon, cname = wz.geocode_city(city, country)
             data = wz.fetch_daily_forecast(lat, lon, days=1)
             daily = data.get("daily", {})
             for i, d in enumerate(daily.get("time", [])):
@@ -350,10 +421,13 @@ def main(config_path: Optional[str] = None):
         except Exception as e:
             messagebox.showerror("Error", f"Weather fetch failed: {e}")
 
-    def fetch_forecast(db, city, country, days):
+    def fetch_forecast(db, cfg, user_name, city, country, days):
         try:
             days = max(1, min(int(days or 1), 7))
-            lat, lon, cname = wz.geocode_city(city, country)
+            profile = get_user(db, user_name) or _default_profile(user_name)
+            resolved_city = city.strip() or (profile[7] or "").strip() or cfg.get("default_city", "")
+            resolved_country = country.strip() or (profile[8] or "").strip() or cfg.get("default_country", "")
+            lat, lon, cname = wz.geocode_city(resolved_city, resolved_country)
             data = wz.fetch_daily_forecast(lat, lon, days=days)
             daily = data.get("daily", {})
             for i, d in enumerate(daily.get("time", [])):

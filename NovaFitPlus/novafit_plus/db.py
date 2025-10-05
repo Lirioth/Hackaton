@@ -22,6 +22,8 @@ SCHEMA = [
         height_cm REAL,
         weight_kg REAL,
         activity_level TEXT,
+        city TEXT,
+        country TEXT,
         created_at TEXT
     );''',
     '''CREATE TABLE IF NOT EXISTS activities (
@@ -104,18 +106,67 @@ def migrate_schema(db_path: str):
                 """
             )
 
-def upsert_user(db_path: str, name: str, age: int, sex: str, height_cm: float, weight_kg: float, activity_level: str):
+        cur.execute("PRAGMA table_info(users)")
+        user_cols = [r[1] for r in cur.fetchall()]
+        added_city = False
+        added_country = False
+        if "city" not in user_cols:
+            cur.execute("ALTER TABLE users ADD COLUMN city TEXT")
+            added_city = True
+        if "country" not in user_cols:
+            cur.execute("ALTER TABLE users ADD COLUMN country TEXT")
+            added_country = True
+
+        if added_city or added_country or "city" in user_cols or "country" in user_cols:
+            from .utils import load_config  # local import to avoid cycle 🤖
+
+            cfg = load_config()
+            default_city = cfg.get("default_city", "")
+            default_country = cfg.get("default_country", "")
+        else:
+            default_city = ""
+            default_country = ""
+
+        if "city" in user_cols or added_city:
+            cur.execute(
+                "UPDATE users SET city = ? WHERE city IS NULL OR TRIM(city) = ''",
+                (default_city,),
+            )
+        if "country" in user_cols or added_country:
+            cur.execute(
+                "UPDATE users SET country = ? WHERE country IS NULL OR TRIM(country) = ''",
+                (default_country,),
+            )
+
+def upsert_user(
+    db_path: str,
+    name: str,
+    age: int,
+    sex: str,
+    height_cm: float,
+    weight_kg: float,
+    activity_level: str,
+    city: str,
+    country: str,
+):
     with get_conn(db_path) as c:
         cur = c.cursor()
-        cur.execute("INSERT OR IGNORE INTO users(name, age, sex, height_cm, weight_kg, activity_level, created_at) VALUES (?,?,?,?,?,?,DATE('now'))",
-                    (name, age, sex, height_cm, weight_kg, activity_level))
-        cur.execute("UPDATE users SET age=?, sex=?, height_cm=?, weight_kg=?, activity_level=? WHERE name=?",
-                    (age, sex, height_cm, weight_kg, activity_level, name))
+        cur.execute(
+            "INSERT OR IGNORE INTO users(name, age, sex, height_cm, weight_kg, activity_level, city, country, created_at) VALUES (?,?,?,?,?,?,?,?,DATE('now'))",
+            (name, age, sex, height_cm, weight_kg, activity_level, city, country),
+        )
+        cur.execute(
+            "UPDATE users SET age=?, sex=?, height_cm=?, weight_kg=?, activity_level=?, city=?, country=? WHERE name=?",
+            (age, sex, height_cm, weight_kg, activity_level, city, country, name),
+        )
 
 def get_user(db_path: str, name: str):
     with get_conn(db_path) as c:
         cur = c.cursor()
-        cur.execute("SELECT id, name, age, sex, height_cm, weight_kg, activity_level FROM users WHERE name=?", (name,))
+        cur.execute(
+            "SELECT id, name, age, sex, height_cm, weight_kg, activity_level, city, country FROM users WHERE name=?",
+            (name,),
+        )
         return cur.fetchone()
 
 def upsert_activity(db_path: str, user_name: str, date: str, steps: int, calories: int, mood: int, notes: str, sleep_hours: float):

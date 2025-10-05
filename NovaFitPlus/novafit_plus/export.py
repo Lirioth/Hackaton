@@ -8,11 +8,23 @@ def export_json(db_path: str, export_dir: str, user_name: str, days: int = 14) -
 
     with get_conn(db_path) as c:
         cur = c.cursor()
-        cur.execute("SELECT id, name, age, sex, height_cm, weight_kg, activity_level FROM users WHERE name=?", (user_name,))
+        cur.execute(
+            "SELECT id, name, age, sex, height_cm, weight_kg, activity_level, city, country FROM users WHERE name=?",
+            (user_name,),
+        )
         u = cur.fetchone()
         if u:
-            uid, name, age, sex, h, w, al = u
-            data["profile"] = {"name": name, "age": age, "sex": sex, "height_cm": h, "weight_kg": w, "activity_level": al}
+            uid, name, age, sex, h, w, al, city, country = u
+            data["profile"] = {
+                "name": name,
+                "age": age,
+                "sex": sex,
+                "height_cm": h,
+                "weight_kg": w,
+                "activity_level": al,
+                "city": city,
+                "country": country,
+            }
         else:
             uid = None
 
@@ -56,12 +68,24 @@ def export_excel(db_path: str, export_dir: str, user_name: str, days: int = 14) 
     with get_conn(db_path) as c:
         cur = c.cursor()
         # Profile
-        cur.execute("SELECT id, name, age, sex, height_cm, weight_kg, activity_level FROM users WHERE name=?", (user_name,))
+        cur.execute(
+            "SELECT id, name, age, sex, height_cm, weight_kg, activity_level, city, country FROM users WHERE name=?",
+            (user_name,),
+        )
         u = cur.fetchone()
         ws_profile.append(["field", "value"])
         if u:
-            uid, name, age, sex, h, w, al = u
-            for k, v in [("name", name), ("age", age), ("sex", sex), ("height_cm", h), ("weight_kg", w), ("activity_level", al)]:
+            uid, name, age, sex, h, w, al, city, country = u
+            for k, v in [
+                ("name", name),
+                ("age", age),
+                ("sex", sex),
+                ("height_cm", h),
+                ("weight_kg", w),
+                ("activity_level", al),
+                ("city", city),
+                ("country", country),
+            ]:
                 ws_profile.append([k, v])
         else:
             uid = None
