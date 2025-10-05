@@ -3,7 +3,9 @@ from contextlib import contextmanager
 
 @contextmanager
 def get_conn(db_path: str):
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    dir_name = os.path.dirname(db_path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
     conn = sqlite3.connect(db_path)
     try:
         yield conn
