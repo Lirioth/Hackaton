@@ -1,5 +1,5 @@
 from .utils import load_config, today_iso, clamp, print_box, ascii_bar
-from .db import init_db, upsert_user, get_user, upsert_activity, insert_weather, tail, migrate_schema, sleep_on_date
+from .db import init_db, upsert_user, get_user, upsert_activity, insert_weather, tail, migrate_schema, sleep_on_date, InvalidTableError
 from .db import add_water_intake, daily_water_total, weather_on_date
 from . import weather as wz
 from .profile import bmi, bmr_mifflin, maintenance_calories
@@ -194,14 +194,13 @@ def menu():
             seed_faker(db, user_name, days)
             print(f"Seed completed ({days} days).")
         elif op == "9":
-            print_box("users (last 5)")
-            print(tail(db, "users", 5))
-            print_box("activities (last 5)")
-            print(tail(db, "activities", 5))
-            print_box("weather (last 5)")
-            print(tail(db, "weather", 5))
-            print_box("water_intake (last 5)")
-            print(tail(db, "water_intake", 5))
+            tables = ("users", "activities", "weather", "water_intake")
+            for tbl in tables:
+                print_box(f"{tbl} (last 5)")
+                try:
+                    print(tail(db, tbl, 5))
+                except InvalidTableError as err:
+                    print(f"Table error: {err}")
         elif op == "0":
             print("Goodbye.")
             break
