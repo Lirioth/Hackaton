@@ -20,8 +20,24 @@ def _demonstrate_repeat_log(db_path: str, user: str, date: str, steps: int, calo
     print(f"[seed] Re-logged activity for {user} on {date}; rows now: {total} (expected 1).")
 
 
-def seed_user(db_path: str, name="Kevin", age=30, sex="M", height_cm=166, weight_kg=66, activity_level="light"):
-    upsert_user(db_path, name, age, sex, height_cm, weight_kg, activity_level)
+def seed_user(
+    db_path: str,
+    name="Kevin",
+    age=30,
+    sex="M",
+    height_cm=166,
+    weight_kg=66,
+    activity_level="light",
+    city=None,
+    country=None,
+):
+    if city is None or country is None:
+        from .utils import load_config  # local import keeps seeding lightweight 🤖
+
+        cfg = load_config()
+        city = cfg.get("default_city", "") if city is None else city
+        country = cfg.get("default_country", "") if country is None else country
+    upsert_user(db_path, name, age, sex, height_cm, weight_kg, activity_level, city or "", country or "")
 
 
 def seed_random(db_path: str, user: str, days: int = 21):

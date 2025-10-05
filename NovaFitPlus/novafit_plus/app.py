@@ -9,15 +9,39 @@ from .export import export_json, export_excel
 from typing import Optional
 import datetime as _dt
 
+
+def _default_profile(name: str):
+    return (None, name, 30, "M", 166, 66, "light", "", "")
+
+
 def onboarding(db, default_name="Kevin"):
     print_box("Onboarding — Profile")
-    name = input(f"Name (default {default_name}): ").strip() or default_name
-    age = int(input("Age: ") or 30)
-    sex = input("Sex (M/F/Other): ").strip() or "M"
-    height_cm = float(input("Height cm: ") or 166)
-    weight_kg = float(input("Weight kg: ") or 66)
-    activity_level = input("Activity level (sedentary/light/moderate/active) [light]: ").strip().lower() or "light"
-    upsert_user(db, name, age, sex, height_cm, weight_kg, activity_level)
+    cfg = load_config()
+    existing = get_user(db, default_name)
+    if existing:
+        _, ex_name, ex_age, ex_sex, ex_h, ex_w, ex_al, ex_city, ex_country = existing
+    else:
+        _, ex_name, ex_age, ex_sex, ex_h, ex_w, ex_al, ex_city, ex_country = _default_profile(default_name)
+    name_default = ex_name or default_name
+    name = input(f"Name (default {name_default}): ").strip() or name_default
+    age = int(input(f"Age [{ex_age}]: ").strip() or ex_age)
+    sex = input(f"Sex (M/F/Other) [{ex_sex}]: ").strip() or ex_sex
+    height_cm = float(input(f"Height cm [{ex_h}]: ").strip() or ex_h)
+    weight_kg = float(input(f"Weight kg [{ex_w}]: ").strip() or ex_w)
+    activity_level_default = (ex_al or "light").lower()
+    activity_level = (
+        input(
+            f"Activity level (sedentary/light/moderate/active) [{activity_level_default}]: "
+        )
+        .strip()
+        .lower()
+        or activity_level_default
+    )
+    city_default = ex_city or cfg.get("default_city", "")
+    country_default = ex_country or cfg.get("default_country", "")
+    city = input(f"City (default {city_default or 'n/a'}): ").strip() or city_default
+    country = input(f"Country (default {country_default or 'n/a'}): ").strip() or country_default
+    upsert_user(db, name, age, sex, height_cm, weight_kg, activity_level, city, country)
     val, cat = bmi(weight_kg, height_cm)
     bmr = bmr_mifflin(age, sex, height_cm, weight_kg)
     maint = maintenance_calories(bmr, activity_level)
@@ -76,14 +100,19 @@ def log_water(db, user_name, date_input: Optional[str] = None):
 
 def dashboard(db, user_name):
     print_box("Daily Dashboard")
-    u = get_user(db, user_name) or (None, user_name, 30, "M", 166, 66, "light")
-    _, name, age, sex, h, w, al = u
+    u = get_user(db, user_name) or _default_profile(user_name)
+    _, name, age, sex, h, w, al, city, country = u
     b, cat = bmi(w, h)
     bmr = bmr_mifflin(age, sex, h, w)
     maint = maintenance_calories(bmr, al)
     prog = hydration_progress(db, user_name, today_iso(), w)
     bar = ascii_bar(prog["total_ml"], prog["goal_ml"])
     print(f"User: {name} | Age: {age} | Sex: {sex} | Activity: {al}")
+    if city or country:
+        loc_parts = [part for part in (city, country) if part]
+        print(f"Location: {', '.join(loc_parts)}")
+    else:
+        print("Location: not set")
     print(f"Height: {h} cm | Weight: {w} kg | BMI: {b} ({cat})")
     print(f"BMR: {bmr} kcal | Maintenance: {maint} kcal")
     print(f"Hydration: {prog['total_ml']}/{prog['goal_ml']} ml {bar} (remaining {prog['remaining_ml']} ml)")
@@ -103,7 +132,9 @@ def dashboard(db, user_name):
         if ans == 'y':
             cfg = load_config()
             try:
-                lat, lon, cname = wz.geocode_city(cfg['default_city'], cfg['default_country'])
+                fetch_city = (city or '').strip() or cfg['default_city']
+                fetch_country = (country or '').strip() or cfg['default_country']
+                lat, lon, cname = wz.geocode_city(fetch_city, fetch_country)
                 data = wz.fetch_daily_forecast(lat, lon, days=1)
                 daily = data.get('daily', {})
                 for i, d in enumerate(daily.get('time', [])):
@@ -123,10 +154,13 @@ def dashboard(db, user_name):
         else:
             print("Skipping weather fetch.")
 
-def fetch_weather(db, cfg):
+def fetch_weather(db, cfg, user_name):
     print_box("Weather Fetch")
-    city = input(f"City (default {cfg['default_city']}): ").strip() or cfg["default_city"]
-    country = input(f"Country (default {cfg['default_country']}): ").strip() or cfg["default_country"]
+    profile = get_user(db, user_name)
+    city_default = (profile[7] if profile else "") or cfg["default_city"]
+    country_default = (profile[8] if profile else "") or cfg["default_country"]
+    city = input(f"City (default {city_default}): ").strip() or city_default
+    country = input(f"Country (default {country_default}): ").strip() or country_default
     days = int(input("Days (1-7): ") or 1)
     days = max(1, min(days, 7))
     lat, lon, cname = wz.geocode_city(city, country)
@@ -151,8 +185,8 @@ def do_analytics(db, user_name):
     for d, cond, score in best_running_days(db, days):
         print(f"{d} — {cond} — Score: {score}")
     print_box("Hydration adherence (last 7 days)")
-    u = get_user(db, user_name) or (None, user_name, 30, "M", 166, 66, "light")
-    _, name, age, sex, h, w, al = u
+    u = get_user(db, user_name) or _default_profile(user_name)
+    _, _, _, _, h, w, al, _, _ = u
     rep = hydration_adherence(db, user_name, w, days=7)
     for row in rep:
         print(row)
@@ -205,7 +239,7 @@ def menu(config_path: Optional[str] = None):
         elif op == "4":
             dashboard(db, user_name)
         elif op == "5":
-            fetch_weather(db, cfg)
+            fetch_weather(db, cfg, user_name)
         elif op == "6":
             do_analytics(db, user_name)
         elif op == "7":
