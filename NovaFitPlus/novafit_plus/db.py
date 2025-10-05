@@ -58,6 +58,16 @@ SCHEMA = [
     );'''
 ]
 
+class InvalidTableError(ValueError):
+    pass
+
+_TAIL_SQL = {
+    "users": "SELECT * FROM users ORDER BY id DESC LIMIT ?",
+    "activities": "SELECT * FROM activities ORDER BY id DESC LIMIT ?",
+    "weather": "SELECT * FROM weather ORDER BY id DESC LIMIT ?",
+    "water_intake": "SELECT * FROM water_intake ORDER BY id DESC LIMIT ?",
+}
+
 def init_db(db_path: str):
     with get_conn(db_path) as c:
         cur = c.cursor()
@@ -166,7 +176,10 @@ def sleep_on_date(db_path: str, user_name: str, date: str) -> float:
         return float(r2[0]) if r2 and r2[0] is not None else 0.0
 
 def tail(db_path: str, table: str, n: int = 5):
+    sql = _TAIL_SQL.get(table)
+    if not sql:
+        raise InvalidTableError(f"Invalid table name: {table}")
     with get_conn(db_path) as c:
         cur = c.cursor()
-        cur.execute(f"SELECT * FROM {table} ORDER BY id DESC LIMIT ?", (n,))
+        cur.execute(sql, (n,))
         return cur.fetchall()
