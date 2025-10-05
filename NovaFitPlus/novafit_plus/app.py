@@ -1,12 +1,13 @@
 from .utils import load_config, today_iso, clamp, print_box, ascii_bar
 from .db import init_db, upsert_user, get_user, upsert_activity, insert_weather, tail, migrate_schema, sleep_on_date, InvalidTableError
-from .db import add_water_intake, daily_water_total, weather_on_date
+from .db import daily_water_total, weather_on_date
 from . import weather as wz
 from .profile import bmi, bmr_mifflin, maintenance_calories
 from .hydration import add_intake, hydration_progress, daily_water_goal_ml
 from .analysis import kpis, best_running_days, hydration_adherence, sleep_stats, health_score
 from .export import export_json, export_excel
 from typing import Optional
+import datetime as _dt
 
 def onboarding(db, default_name="Kevin"):
     print_box("Onboarding — Profile")
@@ -23,20 +24,41 @@ def onboarding(db, default_name="Kevin"):
     print(f"Saved. BMI: {val} ({cat}) | BMR: {bmr} kcal | Maintenance: {maint} kcal")
     return name
 
-def log_activity(db, user_name):
-    print_box("Log Activity (today)")
-    date = today_iso()
+def _ensure_iso_date(value: str) -> str:
+    try:
+        return _dt.date.fromisoformat(value).isoformat()
+    except ValueError as exc:
+        raise ValueError("Invalid date. Please use YYYY-MM-DD.") from exc
+
+
+def _resolve_date_input(date_input: Optional[str], prompt: str) -> str:
+    default = today_iso()
+    if date_input is not None:
+        return _ensure_iso_date(date_input.strip() or default)
+    while True:
+        raw = input(f"{prompt} [{default}]: ").strip()
+        candidate = raw or default
+        try:
+            return _ensure_iso_date(candidate)
+        except ValueError:
+            print("Invalid date. Please use YYYY-MM-DD.")
+
+
+def log_activity(db, user_name, date_input: Optional[str] = None):
+    date = _resolve_date_input(date_input, "Date (YYYY-MM-DD)")
+    print_box(f"Log Activity ({date})")
     steps = int(input("Steps: ") or 0)
     calories = int(input("Calories: ") or 0)
     mood = clamp(int(input("Mood (1-5): ") or 3), 1, 5)
     notes = input("Notes: ").strip()
     sleep = float(input("Sleep hours: ") or 0)
     upsert_activity(db, user_name, date, steps, calories, mood, notes, sleep)
-    print("Activity saved.")
+    print(f"Activity saved for {date}.")
 
-def log_water(db, user_name):
-    print_box("Log Water Intake")
-    date = today_iso()
+
+def log_water(db, user_name, date_input: Optional[str] = None):
+    date = _resolve_date_input(date_input, "Date (YYYY-MM-DD)")
+    print_box(f"Log Water Intake ({date})")
     print("Quick picks: [1]=250ml glass, [2]=500ml bottle, [3]=750ml big bottle, [4]=custom")
     ch = input("Choose: ").strip() or "1"
     if ch == "1":
@@ -50,7 +72,7 @@ def log_water(db, user_name):
         src = input("Source (glass/bottle/thermos/other): ").strip() or "other"
     add_intake(db, user_name, date, ml, src)
     total = daily_water_total(db, user_name, date)
-    print(f"Added {ml} ml ({src}). Today total: {total} ml.")
+    print(f"Added {ml} ml ({src}) for {date}. Total for {date}: {total} ml.")
 
 def dashboard(db, user_name):
     print_box("Daily Dashboard")
@@ -163,7 +185,7 @@ def menu(config_path: Optional[str] = None):
     while True:
         print_box("Menu")
         print("1) Setup/Update profile")
-        print("2) Log TODAY activity")
+        print("2) Log activity")
         print("3) Log water intake")
         print("4) Daily dashboard")
         print("5) Fetch & save weather")

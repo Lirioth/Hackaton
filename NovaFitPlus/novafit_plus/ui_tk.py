@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from tkinter import font as tkfont
 from typing import Optional
+import datetime as _dt
 from .utils import load_config, today_iso
 from .db import get_user, daily_water_total, add_water_intake, weather_on_date, insert_weather, upsert_activity, upsert_user, tail
 from .db import migrate_schema, sleep_on_date
@@ -82,6 +83,13 @@ def main(config_path: Optional[str] = None):
             style.configure('TNotebook.Tab', background='SystemButtonFace', foreground='black')
     apply_theme('light')
 
+    def resolve_date_value(raw: Optional[str]) -> str:
+        candidate = (raw or "").strip() or today_iso()
+        try:
+            return _dt.date.fromisoformat(candidate).isoformat()
+        except ValueError as exc:
+            raise ValueError("Invalid date. Please use YYYY-MM-DD.") from exc
+
     nb = ttk.Notebook(root)
     nb.pack(fill="both", expand=True)
 
@@ -132,8 +140,13 @@ def main(config_path: Optional[str] = None):
         lbl_score.config(text=f"{hs['score']}")
 
     btns = ttk.Frame(tab_dash); btns.pack(fill="x", pady=6)
-    def quick_add(ml):
-        add_water_intake(db, user_var.get().strip() or default_user, today_iso(), ml, "gui")
+    def quick_add(ml: int, date_input: Optional[str] = None, source: str = "gui"):
+        try:
+            chosen_date = resolve_date_value(date_input if date_input is not None else today_iso())
+        except ValueError as err:
+            messagebox.showerror("Invalid date", str(err))
+            return
+        add_water_intake(db, user_var.get().strip() or default_user, chosen_date, ml, source)
         refresh_dashboard()
     ttk.Button(btns, text="Refresh", command=refresh_dashboard).pack(side="left", padx=4)
     ttk.Button(btns, text="Water +250 ml", command=lambda: quick_add(250)).pack(side="left", padx=4)
@@ -143,35 +156,53 @@ def main(config_path: Optional[str] = None):
     # Activity tab
     tab_act = ttk.Frame(nb, padding=10); nb.add(tab_act, text="Activity")
     act_grid = ttk.Frame(tab_act); act_grid.pack(fill="x")
+    act_date_var = tk.StringVar(value=today_iso())
+    ttk.Label(act_grid, text="Date (YYYY-MM-DD)").grid(row=0, column=0, sticky="e", padx=4, pady=4)
+    ttk.Entry(act_grid, textvariable=act_date_var, width=14).grid(row=0, column=1, sticky="w", padx=4, pady=4)
     steps_var = tk.StringVar(); cals_var = tk.StringVar(); mood_var = tk.StringVar(value="3"); notes_var = tk.StringVar(); sleep_var = tk.StringVar()
     for i, (label, var) in enumerate([("Steps", steps_var), ("Calories", cals_var), ("Mood (1-5)", mood_var), ("Sleep hours", sleep_var)]):
-        ttk.Label(act_grid, text=label).grid(row=0, column=2*i, sticky="e", padx=4, pady=4)
-        ttk.Entry(act_grid, textvariable=var, width=10).grid(row=0, column=2*i+1, sticky="w", padx=4, pady=4)
+        ttk.Label(act_grid, text=label).grid(row=1, column=2*i, sticky="e", padx=4, pady=4)
+        ttk.Entry(act_grid, textvariable=var, width=10).grid(row=1, column=2*i+1, sticky="w", padx=4, pady=4)
     ttk.Label(tab_act, text="Notes").pack(anchor="w")
     ent_notes = ttk.Entry(tab_act, textvariable=notes_var, width=80); ent_notes.pack(fill="x")
 
     def save_activity():
         try:
+            chosen_date = resolve_date_value(act_date_var.get())
             steps = int(steps_var.get() or 0)
             cals = int(cals_var.get() or 0)
             mood = int(mood_var.get() or 3); mood = max(1, min(5, mood))
             sleep = float(sleep_var.get() or 0.0)
-            upsert_activity(db, user_var.get().strip() or default_user, today_iso(), steps, cals, mood, notes_var.get().strip(), sleep)
-            messagebox.showinfo("Saved", "Activity saved.")
+            upsert_activity(db, user_var.get().strip() or default_user, chosen_date, steps, cals, mood, notes_var.get().strip(), sleep)
+            messagebox.showinfo("Saved", f"Activity saved for {chosen_date}.")
             refresh_dashboard()
+        except ValueError as err:
+            messagebox.showerror("Invalid date", str(err))
         except Exception as e:
             messagebox.showerror("Error", str(e))
-    ttk.Button(tab_act, text="Save Today's Activity", command=save_activity).pack(pady=8)
+    ttk.Button(tab_act, text="Save Activity", command=save_activity).pack(pady=8)
 
     # Water tab
     tab_water = ttk.Frame(nb, padding=10); nb.add(tab_water, text="Water")
+    water_date_var = tk.StringVar(value=today_iso())
+    date_frame = ttk.Frame(tab_water); date_frame.pack(anchor="w", pady=4)
+    ttk.Label(date_frame, text="Date (YYYY-MM-DD):").pack(side="left", padx=4)
+    ttk.Entry(date_frame, textvariable=water_date_var, width=14).pack(side="left", padx=4)
     ttk.Label(tab_water, text="Quick add:").pack(anchor="w")
     wbtns = ttk.Frame(tab_water); wbtns.pack(anchor="w", pady=4)
     for ml in (250, 500, 750):
-        ttk.Button(wbtns, text=f"+{ml} ml", command=lambda m=ml: quick_add(m)).pack(side="left", padx=4)
+        ttk.Button(wbtns, text=f"+{ml} ml", command=lambda m=ml: quick_add(m, water_date_var.get(), f"water-tab-{m}")).pack(side="left", padx=4)
     cust_var = tk.StringVar()
-    ttk.Entry(tab_water, textvariable=cust_var, width=10).pack(side="left", padx=4)
-    ttk.Button(tab_water, text="Add custom ml", command=lambda: (quick_add(int(cust_var.get() or 0)))).pack(side="left", padx=4)
+    cust_frame = ttk.Frame(tab_water); cust_frame.pack(anchor="w", pady=4)
+    ttk.Entry(cust_frame, textvariable=cust_var, width=10).pack(side="left", padx=4)
+    def add_custom_water():
+        try:
+            ml = int(cust_var.get() or 0)
+        except ValueError:
+            messagebox.showerror("Invalid amount", "Please enter milliliters as a number.")
+            return
+        quick_add(ml, water_date_var.get(), "water-tab-custom")
+    ttk.Button(cust_frame, text="Add custom ml", command=add_custom_water).pack(side="left", padx=4)
 
     # Weather tab
     tab_w = ttk.Frame(nb, padding=10); nb.add(tab_w, text="Weather")
