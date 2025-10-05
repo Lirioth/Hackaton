@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from tkinter import font as tkfont
+from typing import Optional
 from .utils import load_config, today_iso
 from .db import get_user, daily_water_total, add_water_intake, weather_on_date, insert_weather, upsert_activity, upsert_user, tail
 from .db import migrate_schema, sleep_on_date
@@ -44,8 +45,8 @@ def dashboard_text(db, user):
         lines.append("Today's weather: not found.")
     return "\n".join(lines), total, goal
 
-def main():
-    cfg = load_config()
+def main(config_path: Optional[str] = None):
+    cfg = load_config(config_path)
     db = cfg["db_path"]
     _ensure(db)
     default_user = "Kevin"

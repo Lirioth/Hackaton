@@ -1,9 +1,40 @@
 import os, json, datetime as _dt
+from pathlib import Path
+from importlib import resources
+from typing import Optional, Union
 
-def load_config(path: str = "config.json") -> dict:
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"config.json not found in {os.getcwd()}")
-    with open(path, "r", encoding="utf-8") as f:
+
+_CONFIG_RESOURCE = "config.json"
+_ENV_CONFIG = "NOVAFIT_CONFIG"
+
+
+PathLike = Union[str, os.PathLike]
+
+
+def _try_path(candidate: Optional[PathLike]) -> Optional[dict]:
+    if not candidate:
+        return None
+    path = Path(candidate).expanduser()
+    if path.is_file():
+        with path.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
+def load_config(path: Optional[PathLike] = None) -> dict:
+    cfg = _try_path(path)
+    if cfg is not None:
+        return cfg
+
+    cfg = _try_path(os.environ.get(_ENV_CONFIG))
+    if cfg is not None:
+        return cfg
+
+    package_files = resources.files(__package__)
+    resource_path = package_files / _CONFIG_RESOURCE
+    if not resource_path.is_file():
+        raise FileNotFoundError("Bundled configuration missing from package")
+    with resource_path.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 def today_iso():

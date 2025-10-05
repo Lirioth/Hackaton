@@ -6,6 +6,7 @@ from .profile import bmi, bmr_mifflin, maintenance_calories
 from .hydration import add_intake, hydration_progress, daily_water_goal_ml
 from .analysis import kpis, best_running_days, hydration_adherence, sleep_stats, health_score
 from .export import export_json, export_excel
+from typing import Optional
 
 def onboarding(db, default_name="Kevin"):
     print_box("Onboarding — Profile")
@@ -142,8 +143,8 @@ def do_export(db, cfg, user_name):
     out_xlsx = export_excel(db, cfg["export_dir"], user_name, days=14)
     print(f"Export ready: {out_json} | {out_xlsx}")
 
-def menu():
-    cfg = load_config()
+def menu(config_path: Optional[str] = None):
+    cfg = load_config(config_path)
     db = cfg["db_path"]
     init_db(db)
     migrate_schema(db)
