@@ -3,10 +3,6 @@ from tkinter import ttk, messagebox
 from tkinter import font as tkfont
 from typing import Optional
 import datetime as _dt
-import matplotlib
-
-# Force TkAgg backend for interactive GUI experience 😀
-matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from .utils import load_config, today_iso
 from .db import get_user, daily_water_total, add_water_intake, weather_on_date, insert_weather, upsert_activity, upsert_user, tail
@@ -640,6 +636,8 @@ def main(config_path: Optional[str] = None):
             return
         if quick_add(ml, water_date_var.get(), "water-tab-custom"):
             cust_var.set("")
+    ttk.Button(cust_frame, text="Add custom ml", command=add_custom_water).pack(side="left", padx=4)
+        quick_add(ml, water_date_var.get(), "water-tab-custom")
     ttk.Button(cust_frame, text="Add custom ml", style='Secondary.TButton', command=add_custom_water).pack(side="left", padx=4)
 
     # 🌦️ Weather tab
