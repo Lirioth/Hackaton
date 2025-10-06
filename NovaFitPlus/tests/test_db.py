@@ -4,7 +4,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from novafit_plus.db import get_conn, init_db, migrate_schema, upsert_user, get_user
+from novafit_plus.db import (
+    get_conn,
+    init_db,
+    migrate_schema,
+    upsert_user,
+    get_user,
+    insert_weather,
+)
 from novafit_plus.utils import load_config
 
 
@@ -69,3 +76,46 @@ def test_upsert_user_round_trip_with_location(tmp_path):
     row = get_user(str(db_path), "Bob")
     assert row[7] == "Lisbon"
     assert row[8] == "Portugal"
+
+
+def test_insert_weather_overwrites_existing_row(tmp_path):
+    db_path = tmp_path / "weather.db"
+    init_db(str(db_path))
+    migrate_schema(str(db_path))
+    insert_weather(
+        str(db_path),
+        "2024-05-20",
+        "Lisbon",
+        38.72,
+        -9.14,
+        22.5,
+        15.3,
+        65,
+        18.2,
+        "Sunny",
+    )
+    insert_weather(
+        str(db_path),
+        "2024-05-20",
+        "Lisbon",
+        38.72,
+        -9.14,
+        24.1,
+        16.0,
+        70,
+        19.0,
+        "Partly cloudy",
+    )
+    with get_conn(str(db_path)) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT COUNT(*), temp_max, temp_min, humidity, wind_speed, condition FROM weather WHERE date=? AND city=?",
+            ("2024-05-20", "Lisbon"),
+        )
+        count, tmax, tmin, hum, wind, cond = cur.fetchone()
+        assert count == 1
+        assert tmax == 24.1
+        assert tmin == 16.0
+        assert hum == 70
+        assert wind == 19.0
+        assert cond == "Partly cloudy"

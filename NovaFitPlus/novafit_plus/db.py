@@ -51,6 +51,8 @@ SCHEMA = [
         wind_speed REAL,
         condition TEXT
     );''',
+    '''CREATE UNIQUE INDEX IF NOT EXISTS idx_weather_date_city
+        ON weather(date, city);''',
     '''CREATE TABLE IF NOT EXISTS water_intake (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -138,6 +140,24 @@ def migrate_schema(db_path: str):
                 (default_country,),
             )
 
+        cur.execute("PRAGMA index_list(weather)")
+        weather_indexes = {row[1] for row in cur.fetchall()}
+        if "idx_weather_date_city" not in weather_indexes:
+            cur.execute(
+                """
+                DELETE FROM weather
+                WHERE id NOT IN (
+                    SELECT MIN(id) FROM weather GROUP BY date, city
+                )
+                """
+            )
+            cur.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_weather_date_city
+                    ON weather(date, city)
+                """
+            )
+
 def upsert_user(
     db_path: str,
     name: str,
@@ -193,7 +213,15 @@ def insert_weather(db_path: str, date: str, city: str, lat: float, lon: float,
         cur = c.cursor()
         cur.execute(
             '''INSERT INTO weather(date, city, latitude, longitude, temp_max, temp_min, humidity, wind_speed, condition)
-               VALUES (?,?,?,?,?,?,?,?,?)''',
+               VALUES (?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(date, city) DO UPDATE SET
+                   latitude=excluded.latitude,
+                   longitude=excluded.longitude,
+                   temp_max=excluded.temp_max,
+                   temp_min=excluded.temp_min,
+                   humidity=excluded.humidity,
+                   wind_speed=excluded.wind_speed,
+                   condition=excluded.condition''',
             (date, city, lat, lon, tmax, tmin, humidity, wind, condition)
         )
 
