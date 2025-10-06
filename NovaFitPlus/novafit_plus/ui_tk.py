@@ -427,6 +427,8 @@ def main(config_path: Optional[str] = None):
             city_var.get(),
             country_var.get(),
             days_var.get(),
+            on_refresh=refresh_dashboard,
+            on_insights=generate_insights,
         ),
     ).grid(row=2, column=0, columnspan=6, pady=6, sticky='w')
 
@@ -650,7 +652,7 @@ def main(config_path: Optional[str] = None):
         except Exception as e:
             messagebox.showerror("Error", f"Weather fetch failed: {e}")
 
-    def fetch_forecast(db, cfg, user_name, city, country, days):
+    def fetch_forecast(db, cfg, user_name, city, country, days, on_refresh=None, on_insights=None):
         try:
             days = max(1, min(int(days or 1), 7))
             profile = get_user(db, user_name) or _default_profile(user_name)
@@ -668,6 +670,11 @@ def main(config_path: Optional[str] = None):
                 cond = wz.code_to_text(code) if code is not None else None
                 insert_weather(db, d, cname, lat, lon, tmax, tmin, int(hum) if hum is not None else None, wind, cond)
             messagebox.showinfo("Success", f"Weather saved for {cname} ({days} day(s)).")
+            if callable(on_refresh):
+                on_refresh()
+            if callable(on_insights):
+                on_insights()
+            status_var.set("Forecast synced — dashboard and insights auto-refreshed.")
         except Exception as e:
             messagebox.showerror("Error", str(e))
 
