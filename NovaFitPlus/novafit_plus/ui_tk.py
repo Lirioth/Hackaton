@@ -202,6 +202,29 @@ def main(config_path: Optional[str] = None):
         style.configure('Card.TFrame', background=palette['card_bg'])
         style.configure('CardTitle.TLabel', background=palette['card_bg'], foreground=palette['muted'], font=subtitle_font)
         style.configure('CardValue.TLabel', background=palette['card_bg'], foreground=palette['accent'], font=metric_font)
+        light_field_bg = '#ffffff'
+        light_field_fg = '#1f2933'
+        entry_field_bg = palette['panel_bg'] if theme_state['mode'] == 'dark' else light_field_bg
+        entry_field_fg = palette['fg'] if theme_state['mode'] == 'dark' else light_field_fg
+        insert_color = palette['fg'] if theme_state['mode'] == 'dark' else light_field_fg
+        disabled_field_bg = palette['status_bg']
+        disabled_field_fg = palette['muted']
+        style.configure('TEntry', fieldbackground=entry_field_bg, foreground=entry_field_fg, insertcolor=insert_color)
+        style.configure('TCombobox', fieldbackground=entry_field_bg, foreground=entry_field_fg, background=entry_field_bg, insertcolor=insert_color)
+        style.configure('TSpinbox', fieldbackground=entry_field_bg, foreground=entry_field_fg, background=entry_field_bg, insertcolor=insert_color)
+        style.map('TEntry', fieldbackground=[('disabled', disabled_field_bg)], foreground=[('disabled', disabled_field_fg)])
+        style.map(
+            'TCombobox',
+            fieldbackground=[('disabled', disabled_field_bg)],
+            background=[('disabled', disabled_field_bg)],
+            foreground=[('disabled', disabled_field_fg)],
+        )
+        style.map(
+            'TSpinbox',
+            fieldbackground=[('disabled', disabled_field_bg)],
+            background=[('disabled', disabled_field_bg)],
+            foreground=[('disabled', disabled_field_fg)],
+        )
         card_palettes = palette.get('cards', {})
         for card_key, card_palette in card_palettes.items():
             style_prefix = card_key.capitalize()
@@ -220,8 +243,41 @@ def main(config_path: Optional[str] = None):
             card['accent'].configure(bg=accent_color)
         style.configure('PanelHeading.TLabel', background=palette['panel_bg'], foreground=palette['fg'], font=title_font)
         style.configure('PanelBody.TLabel', background=palette['panel_bg'], foreground=palette['muted'])
-        style.configure('Accent.TButton', background=palette['accent'], foreground='#ffffff')
-        style.map('Accent.TButton', background=[('active', palette['accent'])], foreground=[('disabled', palette['muted'])])
+        accent_color = palette['accent']
+        neutral_button_bg = palette.get('status_bg', palette['panel_bg'])
+        style.configure('Accent.TButton', background=accent_color, foreground='#ffffff', padding=(10, 6))
+        style.map(
+            'Accent.TButton',
+            background=[
+                ('active', accent_color),
+                ('pressed', accent_color),
+                ('disabled', neutral_button_bg),
+            ],
+            foreground=[
+                ('active', '#ffffff'),
+                ('pressed', '#ffffff'),
+                ('disabled', palette['muted']),
+            ],
+        )
+        style.configure(
+            'Secondary.TButton',
+            background=neutral_button_bg,
+            foreground=palette['fg'],
+            padding=(10, 6),
+        )
+        style.map(
+            'Secondary.TButton',
+            background=[
+                ('active', accent_color),
+                ('pressed', accent_color),
+                ('disabled', neutral_button_bg),
+            ],
+            foreground=[
+                ('active', '#ffffff'),
+                ('pressed', '#ffffff'),
+                ('disabled', palette['muted']),
+            ],
+        )
         style.configure('Accent.Horizontal.TProgressbar', troughcolor=palette['panel_bg'], background=palette['accent'])
         style.configure('Health.Horizontal.TProgressbar', troughcolor=palette['panel_bg'], background=palette['health'])
         style.configure('Sleep.Horizontal.TProgressbar', troughcolor=palette['panel_bg'], background=palette['sleep'])
@@ -406,6 +462,7 @@ def main(config_path: Optional[str] = None):
     ttk.Button(
         btns,
         text="Fetch Today's Weather",
+        style='Secondary.TButton',
         command=lambda: fetch_today_weather(
             db,
             cfg,
@@ -544,6 +601,8 @@ def main(config_path: Optional[str] = None):
         if quick_add(ml, water_date_var.get(), "water-tab-custom"):
             cust_var.set("")
     ttk.Button(cust_frame, text="Add custom ml", command=add_custom_water).pack(side="left", padx=4)
+        quick_add(ml, water_date_var.get(), "water-tab-custom")
+    ttk.Button(cust_frame, text="Add custom ml", style='Secondary.TButton', command=add_custom_water).pack(side="left", padx=4)
 
     # 🌦️ Weather tab
     tab_w = ttk.Frame(nb, padding=16, style='Panel.TFrame'); nb.add(tab_w, text="Weather")
@@ -586,7 +645,7 @@ def main(config_path: Optional[str] = None):
     ttk.Label(qa, text='Quick actions:', style='PanelBody.TLabel').pack(side='left', padx=6)
     ttk.Button(qa, text='+250 ml', style='Accent.TButton', command=lambda: (add_water_intake(db, user_var.get().strip() or default_user, today_iso(), 250, 'insight'), refresh_dashboard(), generate_insights())).pack(side='left', padx=2)
     ttk.Button(qa, text='+500 ml', style='Accent.TButton', command=lambda: (add_water_intake(db, user_var.get().strip() or default_user, today_iso(), 500, 'insight'), refresh_dashboard(), generate_insights())).pack(side='left', padx=2)
-    ttk.Button(qa, text='Prefill 30-min walk', command=lambda: prefill_walk()).pack(side='left', padx=2)
+    ttk.Button(qa, text='Prefill 30-min walk', style='Secondary.TButton', command=lambda: prefill_walk()).pack(side='left', padx=2)
 
     def prefill_walk():
         try:
@@ -638,9 +697,9 @@ def main(config_path: Optional[str] = None):
 
     header_buttons.columnconfigure((0, 1, 2, 3), weight=0)
     ttk.Button(header_buttons, text='Refresh View', style='Accent.TButton', command=lambda: (refresh_dashboard(), generate_insights())).grid(row=0, column=0, padx=4)
-    ttk.Button(header_buttons, text='Toggle Theme', command=switch_theme).grid(row=0, column=1, padx=4)
-    ttk.Button(header_buttons, text='Activity', command=lambda: nb.select(tab_act)).grid(row=0, column=2, padx=4)
-    ttk.Button(header_buttons, text='Reports', command=lambda: nb.select(tab_rep)).grid(row=0, column=3, padx=4)
+    ttk.Button(header_buttons, text='Toggle Theme', style='Secondary.TButton', command=switch_theme).grid(row=0, column=1, padx=4)
+    ttk.Button(header_buttons, text='Activity', style='Secondary.TButton', command=lambda: nb.select(tab_act)).grid(row=0, column=2, padx=4)
+    ttk.Button(header_buttons, text='Reports', style='Secondary.TButton', command=lambda: nb.select(tab_rep)).grid(row=0, column=3, padx=4)
 
     # 📊 Analytics tab
     tab_an = ttk.Frame(nb, padding=16, style='Panel.TFrame'); nb.add(tab_an, text="Analytics")
@@ -748,7 +807,7 @@ def main(config_path: Optional[str] = None):
         except Exception as exc:
             messagebox.showerror('Error', str(exc))
 
-    ttk.Button(controls_rep, text="Export PNGs", command=export_charts).grid(row=0, column=3)
+    ttk.Button(controls_rep, text="Export PNGs", style='Secondary.TButton', command=export_charts).grid(row=0, column=3)
 
     ttk.Label(tab_rep, textvariable=report_status_var, style='PanelBody.TLabel').pack(anchor='w', pady=(8, 4))
 
