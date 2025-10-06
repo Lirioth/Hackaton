@@ -446,17 +446,13 @@ def main(config_path: Optional[str] = None):
     btns = ttk.Frame(tab_dash, style='Panel.TFrame')
     btns.pack(fill="x", pady=6)
     def quick_add(ml: int, date_input: Optional[str] = None, source: str = "gui"):
-        if ml <= 0:
-            messagebox.showerror("Invalid amount", "Please enter a positive water amount in milliliters.")
-            return False
         try:
             chosen_date = resolve_date_value(date_input if date_input is not None else today_iso())
         except ValueError as err:
             messagebox.showerror("Invalid date", str(err))
-            return False
+            return
         add_water_intake(db, user_var.get().strip() or default_user, chosen_date, ml, source)
         refresh_dashboard()
-        return True
     ttk.Button(btns, text="Water +250 ml", style='Accent.TButton', command=lambda: quick_add(250)).pack(side="left", padx=4)
     ttk.Button(btns, text="Water +500 ml", style='Accent.TButton', command=lambda: quick_add(500)).pack(side="left", padx=4)
     ttk.Button(
@@ -595,12 +591,6 @@ def main(config_path: Optional[str] = None):
         except ValueError:
             messagebox.showerror("Invalid amount", "Please enter milliliters as a number.")
             return
-        if ml <= 0:
-            messagebox.showerror("Invalid amount", "Please enter a positive water amount in milliliters.")
-            return
-        if quick_add(ml, water_date_var.get(), "water-tab-custom"):
-            cust_var.set("")
-    ttk.Button(cust_frame, text="Add custom ml", command=add_custom_water).pack(side="left", padx=4)
         quick_add(ml, water_date_var.get(), "water-tab-custom")
     ttk.Button(cust_frame, text="Add custom ml", style='Secondary.TButton', command=add_custom_water).pack(side="left", padx=4)
 
