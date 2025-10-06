@@ -112,6 +112,8 @@ def main(config_path: Optional[str] = None):
     text_widgets = []
     status_widgets = []
     theme_state = {'mode': 'light'}
+    theme_toggle_var = tk.BooleanVar(value=False)
+    theme_toggle_btn: Optional[ttk.Checkbutton] = None
 
     def apply_theme(mode: str = 'light'):
         theme_state['mode'] = mode if mode in theme_colors else 'light'
@@ -130,6 +132,12 @@ def main(config_path: Optional[str] = None):
         style.configure('PanelBody.TLabel', background=palette['panel_bg'], foreground=palette['muted'])
         style.configure('Accent.TButton', background=palette['accent'], foreground='#ffffff')
         style.map('Accent.TButton', background=[('active', palette['accent'])], foreground=[('disabled', palette['muted'])])
+        style.configure('Theme.TCheckbutton', background=palette['bg'], foreground=palette['fg'])
+        style.map(
+            'Theme.TCheckbutton',
+            foreground=[('selected', palette['accent']), ('!disabled', palette['fg'])],
+            background=[('active', palette['bg'])]
+        )
         style.configure('Accent.Horizontal.TProgressbar', troughcolor=palette['panel_bg'], background=palette['accent'])
         style.configure('Health.Horizontal.TProgressbar', troughcolor=palette['panel_bg'], background=palette['health'])
         style.configure('Sleep.Horizontal.TProgressbar', troughcolor=palette['panel_bg'], background=palette['sleep'])
@@ -140,9 +148,18 @@ def main(config_path: Optional[str] = None):
             txt.configure(bg=palette['panel_bg'], fg=palette['fg'], insertbackground=palette['fg'])
         for status in status_widgets:
             status.configure(bg=palette['status_bg'], fg=palette['muted'])
+        theme_toggle_var.set(theme_state['mode'] == 'dark')
+        if theme_toggle_btn is not None:
+            theme_toggle_btn.configure(
+                text='🌙 Dark Mode' if theme_toggle_var.get() else '☀️ Light Mode'
+            )
 
     def switch_theme():
-        apply_theme('dark' if theme_state['mode'] == 'light' else 'light')
+        desired_mode = 'dark' if theme_toggle_var.get() else 'light'
+        if desired_mode == theme_state['mode']:
+            desired_mode = 'dark' if theme_state['mode'] == 'light' else 'light'
+            theme_toggle_var.set(desired_mode == 'dark')
+        apply_theme(desired_mode)
 
     def resolve_date_value(raw: Optional[str]) -> str:
         candidate = (raw or "").strip() or today_iso()
@@ -501,7 +518,14 @@ def main(config_path: Optional[str] = None):
 
     header_buttons.columnconfigure((0, 1, 2, 3), weight=0)
     ttk.Button(header_buttons, text='Refresh View', style='Accent.TButton', command=lambda: (refresh_dashboard(), generate_insights())).grid(row=0, column=0, padx=4)
-    ttk.Button(header_buttons, text='Toggle Theme', command=switch_theme).grid(row=0, column=1, padx=4)
+    theme_toggle_btn = ttk.Checkbutton(
+        header_buttons,
+        text='☀️ Light Mode',
+        style='Theme.TCheckbutton',
+        variable=theme_toggle_var,
+        command=switch_theme
+    )
+    theme_toggle_btn.grid(row=0, column=1, padx=4)
     ttk.Button(header_buttons, text='Activity', command=lambda: nb.select(tab_act)).grid(row=0, column=2, padx=4)
     ttk.Button(header_buttons, text='Reports', command=lambda: nb.select(tab_rep)).grid(row=0, column=3, padx=4)
 
