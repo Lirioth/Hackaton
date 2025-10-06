@@ -59,6 +59,8 @@ This script creates `.venv/`, installs `requirements.txt`, and launches the app.
 
 ## CSV Export & Charts
 - `Export` tab: CSV/JSON/Excel.
-- `Reports` tab: generates PNG charts in `exports/charts/`:
-  - `hydration_pct.png` (adherencia de hidratación)
-  - `steps_vs_sleep.png` (relación entre pasos y sueño)
+- `Reports` tab: now renders interactive charts inline with timeframe controls:
+  - Hydration adherence trend
+  - Steps vs. sleep scatter
+  - Sleep vs. goal comparison
+  - Export the currently shown figures as PNG files in `exports/charts/`

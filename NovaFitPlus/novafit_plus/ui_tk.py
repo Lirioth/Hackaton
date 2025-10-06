@@ -3,6 +3,11 @@ from tkinter import ttk, messagebox
 from tkinter import font as tkfont
 from typing import Optional
 import datetime as _dt
+import matplotlib
+
+matplotlib.use("TkAgg")
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
 from .utils import load_config, today_iso
 from .db import get_user, daily_water_total, add_water_intake, weather_on_date, insert_weather, upsert_activity, upsert_user, tail
 from .db import migrate_schema, sleep_on_date
@@ -11,7 +16,12 @@ from .hydration import daily_water_goal_ml
 from . import weather as wz
 from .analysis import kpis, best_running_days, hydration_adherence, sleep_stats, health_score
 from .export import export_json, export_excel, export_csv
-from .reports import chart_hydration, chart_steps_vs_sleep
+from .reports import (
+    hydration_trend_figure,
+    steps_vs_sleep_figure,
+    sleep_vs_goal_figure,
+    save_report_figures,
+)
 
 
 def _default_profile(name: str):
@@ -534,33 +544,115 @@ def main(config_path: Optional[str] = None):
 
     # 🖼️ Reports tab
     tab_rep = ttk.Frame(nb, padding=16, style='Panel.TFrame'); nb.add(tab_rep, text="Reports")
-    rep_days_var = tk.StringVar(value="14")
-    ttk.Label(tab_rep, text="Days:", style='PanelBody.TLabel').pack(anchor='w')
-    ttk.Entry(tab_rep, textvariable=rep_days_var, width=10).pack(anchor='w')
-    txt_rep = tk.Text(tab_rep, width=100, height=16, wrap='word', relief='flat', bd=0)
-    txt_rep.pack(fill='both', expand=True, pady=8)
-    text_widgets.append(txt_rep)
-    img_label = ttk.Label(tab_rep, style='PanelBody.TLabel')
-    img_label.pack()
-    def gen_charts():
+    reports_controls = ttk.Frame(tab_rep, style='Panel.TFrame')
+    reports_controls.pack(fill='x', pady=(0, 8))
+    reports_controls.columnconfigure(2, weight=1)
+    timeframe_var = tk.StringVar(value="14")
+    ttk.Label(reports_controls, text="Timeframe (days):", style='PanelBody.TLabel').grid(row=0, column=0, sticky='w', padx=(0, 8))
+    timeframe_combo = ttk.Combobox(
+        reports_controls,
+        textvariable=timeframe_var,
+        values=("7", "14", "30"),
+        state='readonly',
+        width=6,
+    )
+    timeframe_combo.grid(row=0, column=1, sticky='w')
+    charts_status_var = tk.StringVar(value="Select a timeframe to view your progress charts.")
+    ttk.Label(reports_controls, textvariable=charts_status_var, style='PanelBody.TLabel').grid(row=0, column=2, sticky='w', padx=(12, 0))
+    buttons_frame = ttk.Frame(reports_controls, style='Panel.TFrame')
+    buttons_frame.grid(row=0, column=3, sticky='e', padx=(12, 0))
+    report_figures = {}
+    report_canvases = {}
+
+    def refresh_report_canvases(figures):
+        """Refresh the Tk canvases with new matplotlib figures."""
+        for key, figure in figures.items():
+            frame = report_frames.get(key)
+            if not frame:
+                continue
+            if key in report_canvases:
+                report_canvases[key].get_tk_widget().destroy()
+            canvas = FigureCanvasTkAgg(figure, master=frame)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill='both', expand=True)
+            report_canvases[key] = canvas
+
+    charts_grid = ttk.Frame(tab_rep, style='Panel.TFrame')
+    charts_grid.pack(fill='both', expand=True)
+    charts_grid.columnconfigure(0, weight=1)
+    charts_grid.columnconfigure(1, weight=1)
+    report_frames = {}
+    chart_definitions = (
+        ("hydration_pct", "Hydration adherence"),
+        ("steps_vs_sleep", "Steps vs sleep"),
+        ("sleep_vs_goal", "Sleep vs goal"),
+    )
+    for idx, (key, title) in enumerate(chart_definitions):
+        row, col = divmod(idx, 2)
+        if idx == 2:
+            row = 1
+            col = 0
+        container = ttk.Frame(charts_grid, style='Panel.TFrame')
+        container.grid(row=row, column=col, padx=6, pady=6, sticky='nsew', columnspan=(1 if idx < 2 else 2))
+        charts_grid.rowconfigure(row, weight=1)
+        ttk.Label(container, text=title, style='PanelHeading.TLabel').pack(anchor='w', pady=(0, 4))
+        frame = ttk.Frame(container, style='Panel.TFrame')
+        frame.pack(fill='both', expand=True)
+        report_frames[key] = frame
+
+    def resolve_days() -> int:
+        """Resolve the selected timeframe ensuring it is a positive integer."""
+        value = timeframe_var.get() or "14"
         try:
-            days = int(rep_days_var.get() or 14)
-            u = get_user(db, user_var.get().strip() or default_user) or _default_profile(default_user)
-            _, _, _, _, h, w, _, _, _ = u
-            p1 = chart_hydration(db, user_var.get().strip() or default_user, w, days)
-            p2 = chart_steps_vs_sleep(db, user_var.get().strip() or default_user, days)
-            txt_rep.delete('1.0', tk.END); txt_rep.insert(tk.END, f"Charts saved:\n{p1}\n{p2}")
-            # 🖼️ Try to preview the last chart
-            try:
-                from tkinter import PhotoImage
-                img = PhotoImage(file=p1)
-                img_label.configure(image=img)
-                img_label.image = img
-            except Exception:
-                pass
-        except Exception as e:
-            messagebox.showerror('Error', str(e))
-    ttk.Button(tab_rep, text="Generate charts", style='Accent.TButton', command=gen_charts).pack(anchor='w', pady=6)
+            days = int(value)
+            if days <= 0:
+                raise ValueError
+            return days
+        except ValueError as exc:
+            raise ValueError("Please choose a valid number of days.") from exc
+
+    def build_report_figures():
+        """Generate matplotlib figures according to the selected timeframe."""
+        user_record = get_user(db, user_var.get().strip() or default_user) or _default_profile(default_user)
+        _, _, _, _, _, weight_kg, _, _, _ = user_record
+        days = resolve_days()
+        figures = {
+            "hydration_pct": hydration_trend_figure(db, user_var.get().strip() or default_user, weight_kg, days),
+            "steps_vs_sleep": steps_vs_sleep_figure(db, user_var.get().strip() or default_user, days),
+            "sleep_vs_goal": sleep_vs_goal_figure(db, user_var.get().strip() or default_user, days=days),
+        }
+        return figures, days
+
+    def refresh_reports(event=None):  # noqa: ARG001
+        """Refresh the reports tab visuals when controls change."""
+        nonlocal report_figures
+        try:
+            figures, days = build_report_figures()
+            report_figures = figures
+            refresh_report_canvases(figures)
+            charts_status_var.set(f"Showing charts for the last {days} days.")
+        except Exception as exc:
+            charts_status_var.set("Unable to render charts. See details in status bar.")
+            messagebox.showerror("Error", str(exc))
+
+    def export_report_images():
+        """Export the currently displayed figures as PNG files."""
+        try:
+            if not report_figures:
+                figures, _ = build_report_figures()
+                refresh_report_canvases(figures)
+                charts_status_var.set("Charts refreshed before exporting.")
+                exported = save_report_figures(figures)
+            else:
+                exported = save_report_figures(report_figures)
+            messagebox.showinfo("Export", "\n".join([f"Saved: {path}" for path in exported.values()]))
+        except Exception as exc:
+            messagebox.showerror("Error", str(exc))
+
+    ttk.Button(buttons_frame, text="Refresh charts", style='Accent.TButton', command=refresh_reports).pack(side='left', padx=(0, 6))
+    ttk.Button(buttons_frame, text="Export PNGs", command=export_report_images).pack(side='left')
+    timeframe_combo.bind('<<ComboboxSelected>>', refresh_reports)
+    refresh_reports()
 
     # 📤 Export tab
     tab_ex = ttk.Frame(nb, padding=16, style='Panel.TFrame'); nb.add(tab_ex, text="Export")
