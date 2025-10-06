@@ -95,7 +95,44 @@ def main(config_path: Optional[str] = None):
             'card_bg': '#ffffff',
             'health': '#10b981',
             'sleep': '#8b5cf6',
-            'status_bg': '#e5e7eb'
+            'status_bg': '#e5e7eb',
+            'cards': {
+                'hydration': {
+                    'bg': '#ffffff',
+                    'accent': '#3b82f6',
+                    'title_fg': '#52606d',
+                    'value_fg': '#1d4ed8',
+                    'icon_fg': '#1d4ed8'
+                },
+                'sleep': {
+                    'bg': '#ffffff',
+                    'accent': '#8b5cf6',
+                    'title_fg': '#52606d',
+                    'value_fg': '#6d28d9',
+                    'icon_fg': '#6d28d9'
+                },
+                'health': {
+                    'bg': '#ffffff',
+                    'accent': '#10b981',
+                    'title_fg': '#52606d',
+                    'value_fg': '#047857',
+                    'icon_fg': '#047857'
+                },
+                'steps': {
+                    'bg': '#ffffff',
+                    'accent': '#f59e0b',
+                    'title_fg': '#52606d',
+                    'value_fg': '#b45309',
+                    'icon_fg': '#b45309'
+                },
+                'calories': {
+                    'bg': '#ffffff',
+                    'accent': '#ef4444',
+                    'title_fg': '#52606d',
+                    'value_fg': '#b91c1c',
+                    'icon_fg': '#b91c1c'
+                }
+            }
         },
         'dark': {
             'bg': '#121820',
@@ -106,13 +143,51 @@ def main(config_path: Optional[str] = None):
             'card_bg': '#1f2933',
             'health': '#34d399',
             'sleep': '#a78bfa',
-            'status_bg': '#111827'
+            'status_bg': '#111827',
+            'cards': {
+                'hydration': {
+                    'bg': '#1f2933',
+                    'accent': '#60a5fa',
+                    'title_fg': '#9baec8',
+                    'value_fg': '#93c5fd',
+                    'icon_fg': '#93c5fd'
+                },
+                'sleep': {
+                    'bg': '#1f2933',
+                    'accent': '#a78bfa',
+                    'title_fg': '#9baec8',
+                    'value_fg': '#c4b5fd',
+                    'icon_fg': '#c4b5fd'
+                },
+                'health': {
+                    'bg': '#1f2933',
+                    'accent': '#34d399',
+                    'title_fg': '#9baec8',
+                    'value_fg': '#6ee7b7',
+                    'icon_fg': '#6ee7b7'
+                },
+                'steps': {
+                    'bg': '#1f2933',
+                    'accent': '#fbbf24',
+                    'title_fg': '#9baec8',
+                    'value_fg': '#fcd34d',
+                    'icon_fg': '#fcd34d'
+                },
+                'calories': {
+                    'bg': '#1f2933',
+                    'accent': '#f87171',
+                    'title_fg': '#9baec8',
+                    'value_fg': '#fca5a5',
+                    'icon_fg': '#fca5a5'
+                }
+            }
         }
     }
     text_widgets = []
     status_widgets = []
     gauge_widgets = {}
     theme_state = {'mode': 'light'}
+    card_elements = []
 
     def apply_theme(mode: str = 'light'):
         theme_state['mode'] = mode if mode in theme_colors else 'light'
@@ -127,6 +202,22 @@ def main(config_path: Optional[str] = None):
         style.configure('Card.TFrame', background=palette['card_bg'])
         style.configure('CardTitle.TLabel', background=palette['card_bg'], foreground=palette['muted'], font=subtitle_font)
         style.configure('CardValue.TLabel', background=palette['card_bg'], foreground=palette['accent'], font=metric_font)
+        card_palettes = palette.get('cards', {})
+        for card_key, card_palette in card_palettes.items():
+            style_prefix = card_key.capitalize()
+            card_bg = card_palette.get('bg', palette['card_bg'])
+            title_fg = card_palette.get('title_fg', palette['muted'])
+            value_fg = card_palette.get('value_fg', palette['accent'])
+            icon_fg = card_palette.get('icon_fg', value_fg)
+            style.configure(f'{style_prefix}Card.TFrame', background=card_bg)
+            style.configure(f'{style_prefix}CardBody.TFrame', background=card_bg)
+            style.configure(f'{style_prefix}Title.TLabel', background=card_bg, foreground=title_fg, font=subtitle_font)
+            style.configure(f'{style_prefix}Value.TLabel', background=card_bg, foreground=value_fg, font=metric_font)
+            style.configure(f'{style_prefix}Icon.TLabel', background=card_bg, foreground=icon_fg, font=title_font)
+        for card in card_elements:
+            card_palette = card_palettes.get(card['key'], {})
+            accent_color = card_palette.get('accent', palette['accent'])
+            card['accent'].configure(bg=accent_color)
         style.configure('PanelHeading.TLabel', background=palette['panel_bg'], foreground=palette['fg'], font=title_font)
         style.configure('PanelBody.TLabel', background=palette['panel_bg'], foreground=palette['muted'])
         style.configure('Accent.TButton', background=palette['accent'], foreground='#ffffff')
@@ -190,20 +281,38 @@ def main(config_path: Optional[str] = None):
 
     cards_frame = ttk.Frame(main_container, style='Header.TFrame')
     cards_frame.pack(fill="x", pady=(12, 8))
+    cards_frame.rowconfigure(0, weight=1)
     for idx in range(5):
         cards_frame.columnconfigure(idx, weight=1)
 
-    def create_stat_card(column: int, title_text: str, var: tk.StringVar):
-        frame = ttk.Frame(cards_frame, style='Card.TFrame', padding=(16, 14))
+    def create_stat_card(column: int, card_key: str, title_text: str, var: tk.StringVar, icon_text: str):
+        style_prefix = card_key.capitalize()
+        frame = ttk.Frame(cards_frame, style=f'{style_prefix}Card.TFrame', padding=(16, 14))
         frame.grid(row=0, column=column, sticky="nsew", padx=6)
-        ttk.Label(frame, text=title_text, style='CardTitle.TLabel').pack(anchor="w")
-        ttk.Label(frame, textvariable=var, style='CardValue.TLabel').pack(anchor="w", pady=(6, 0))
+        frame.columnconfigure(1, weight=1)
+        frame.rowconfigure(0, weight=1)
+        accent_strip = tk.Canvas(frame, width=6, highlightthickness=0, bd=0)
+        accent_strip.grid(row=0, column=0, sticky="ns", padx=(0, 12))
+        content_frame = ttk.Frame(frame, style=f'{style_prefix}CardBody.TFrame')
+        content_frame.grid(row=0, column=1, sticky="nsew")
+        content_frame.columnconfigure(1, weight=1)
+        icon_label = ttk.Label(content_frame, text=icon_text, style=f'{style_prefix}Icon.TLabel')
+        icon_label.grid(row=0, column=0, rowspan=2, sticky="nw", padx=(0, 10))
+        title_label = ttk.Label(content_frame, text=title_text, style=f'{style_prefix}Title.TLabel')
+        title_label.grid(row=0, column=1, sticky="w")
+        value_label = ttk.Label(content_frame, textvariable=var, style=f'{style_prefix}Value.TLabel')
+        value_label.grid(row=1, column=1, sticky="w", pady=(6, 0))
+        card_elements.append({'key': card_key, 'accent': accent_strip})
 
-    create_stat_card(0, "Hydration Today", hydration_summary_var)
-    create_stat_card(1, "Sleep vs Target", sleep_summary_var)
-    create_stat_card(2, "Health Score", score_summary_var)
-    create_stat_card(3, "7-day Steps", steps_summary_var)
-    create_stat_card(4, "Avg Calories", calories_summary_var)
+    cards_config = [
+        ("hydration", "Hydration Today", hydration_summary_var, "💧"),
+        ("sleep", "Sleep vs Target", sleep_summary_var, "🌙"),
+        ("health", "Health Score", score_summary_var, "💚"),
+        ("steps", "7-day Steps", steps_summary_var, "👟"),
+        ("calories", "Avg Calories", calories_summary_var, "🔥"),
+    ]
+    for idx, (key, title, var, icon) in enumerate(cards_config):
+        create_stat_card(idx, key, title, var, icon)
 
     ttk.Separator(main_container, orient='horizontal').pack(fill="x", pady=(4, 12))
 
