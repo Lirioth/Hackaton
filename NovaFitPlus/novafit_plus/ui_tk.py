@@ -188,19 +188,10 @@ def main(config_path: Optional[str] = None):
         }
     }
     text_widgets = []
-    scrollbar_widgets = []
     status_widgets = []
     gauge_widgets = {}
     theme_state = {'mode': 'light'}
     card_elements = []
-
-    # 📝 Helper to update read-only text widgets without exposing edits.
-    def update_text_widget(widget: tk.Text, content: str) -> None:
-        prev_state = widget.cget('state') or 'disabled'
-        widget.configure(state='normal')
-        widget.delete('1.0', tk.END)
-        widget.insert(tk.END, content)
-        widget.configure(state=prev_state)
 
     def apply_theme(mode: str = 'light'):
         theme_state['mode'] = mode if mode in theme_colors else 'light'
@@ -294,35 +285,11 @@ def main(config_path: Optional[str] = None):
         style.configure('Accent.Horizontal.TProgressbar', troughcolor=palette['panel_bg'], background=palette['accent'])
         style.configure('Health.Horizontal.TProgressbar', troughcolor=palette['panel_bg'], background=palette['health'])
         style.configure('Sleep.Horizontal.TProgressbar', troughcolor=palette['panel_bg'], background=palette['sleep'])
-        scrollbar_bg = palette['panel_bg']
-        scrollbar_trough = palette.get('status_bg', palette['panel_bg'])
-        style.configure(
-            'Vertical.TScrollbar',
-            background=scrollbar_bg,
-            troughcolor=scrollbar_trough,
-            arrowcolor=palette['fg'],
-        )
-        style.map(
-            'Vertical.TScrollbar',
-            background=[('active', palette['accent']), ('pressed', palette['accent'])],
-            arrowcolor=[('active', '#ffffff'), ('pressed', '#ffffff')],
-        )
         style.configure('TNotebook', background=palette['panel_bg'])
         style.configure('TNotebook.Tab', background=palette['bg'], foreground=palette['muted'])
         style.map('TNotebook.Tab', background=[('selected', palette['panel_bg'])], foreground=[('selected', palette['fg'])])
         for txt in text_widgets:
-            txt.configure(
-                bg=palette['panel_bg'],
-                fg=palette['fg'],
-                insertbackground=palette['fg'],
-                highlightbackground=palette['panel_bg'],
-                selectbackground=palette['accent'],
-                selectforeground=palette['bg'],
-                disabledbackground=palette['panel_bg'],
-                disabledforeground=palette['muted'],
-            )
-        for sb in scrollbar_widgets:
-            sb.configure(style='Vertical.TScrollbar')
+            txt.configure(bg=palette['panel_bg'], fg=palette['fg'], insertbackground=palette['fg'])
         for status in status_widgets:
             status.configure(bg=palette['status_bg'], fg=palette['muted'])
         for gauge_key, gauge in gauge_widgets.items():
@@ -423,12 +390,8 @@ def main(config_path: Optional[str] = None):
 
     dash_text_frame = ttk.Frame(dash_split, style='Panel.TFrame')
     dash_text = tk.Text(dash_text_frame, width=80, height=16, wrap="word", relief='flat', bd=0)
-    dash_scroll = ttk.Scrollbar(dash_text_frame, orient='vertical', command=dash_text.yview, style='Vertical.TScrollbar')
-    dash_text.configure(yscrollcommand=dash_scroll.set, state='disabled')
-    dash_text.pack(side='left', fill="both", expand=True)
-    dash_scroll.pack(side='right', fill='y')
+    dash_text.pack(fill="both", expand=True)
     text_widgets.append(dash_text)
-    scrollbar_widgets.append(dash_scroll)
     dash_split.add(dash_text_frame, weight=3)
 
     insight_panel = ttk.Frame(dash_split, style='Panel.TFrame', padding=(12, 10))
@@ -515,7 +478,8 @@ def main(config_path: Optional[str] = None):
     def refresh_dashboard():
         user_name = user_var.get().strip() or default_user
         text, total, goal = dashboard_text(db, user_name)
-        update_text_widget(dash_text, text)
+        dash_text.delete("1.0", tk.END)
+        dash_text.insert(tk.END, text)
         pct = 0 if goal <= 0 else int(total * 100 / goal)
         update_gauge('hydration', pct, f"{pct}%")
         hydration_summary_var.set(
@@ -675,15 +639,9 @@ def main(config_path: Optional[str] = None):
     ttk.Radiobutton(rb_frame, text='7 days', variable=tf_var, value='7').pack(side='left', padx=4)
     ttk.Radiobutton(rb_frame, text='30 days', variable=tf_var, value='30').pack(side='left', padx=4)
 
-    ins_text_frame = ttk.Frame(tab_ins, style='Panel.TFrame')
-    ins_text_frame.pack(fill='both', expand=True, pady=8)
-    txt_ins = tk.Text(ins_text_frame, width=100, height=14, wrap='word', relief='flat', bd=0)
-    ins_scroll = ttk.Scrollbar(ins_text_frame, orient='vertical', command=txt_ins.yview, style='Vertical.TScrollbar')
-    txt_ins.configure(yscrollcommand=ins_scroll.set, state='disabled')
-    txt_ins.pack(side='left', fill='both', expand=True)
-    ins_scroll.pack(side='right', fill='y')
+    txt_ins = tk.Text(tab_ins, width=100, height=14, wrap='word', relief='flat', bd=0)
+    txt_ins.pack(fill='both', expand=True, pady=8)
     text_widgets.append(txt_ins)
-    scrollbar_widgets.append(ins_scroll)
 
     qa = ttk.Frame(tab_ins, style='Panel.TFrame'); qa.pack(fill='x')
     ttk.Label(qa, text='Quick actions:', style='PanelBody.TLabel').pack(side='left', padx=6)
@@ -735,7 +693,7 @@ def main(config_path: Optional[str] = None):
             f"Steps: {steps_ins}",
             f"Weather: {wx_ins}",
         ]
-        update_text_widget(txt_ins, '\n'.join(lines))
+        txt_ins.delete('1.0', tk.END); txt_ins.insert(tk.END, '\n'.join(lines))
 
     ttk.Button(tab_ins, text='Generate insights', style='Accent.TButton', command=generate_insights).pack(anchor='w', pady=6)
 
@@ -750,15 +708,9 @@ def main(config_path: Optional[str] = None):
     days_an_var = tk.StringVar(value="14")
     ttk.Label(tab_an, text="Analyze last N days:", style='PanelBody.TLabel').pack(anchor="w")
     ttk.Entry(tab_an, textvariable=days_an_var, width=10).pack(anchor="w")
-    analytics_text_frame = ttk.Frame(tab_an, style='Panel.TFrame')
-    analytics_text_frame.pack(fill="both", expand=True, pady=8)
-    txt_an = tk.Text(analytics_text_frame, width=100, height=16, wrap="word", relief='flat', bd=0)
-    analytics_scroll = ttk.Scrollbar(analytics_text_frame, orient='vertical', command=txt_an.yview, style='Vertical.TScrollbar')
-    txt_an.configure(yscrollcommand=analytics_scroll.set, state='disabled')
-    txt_an.pack(side='left', fill="both", expand=True)
-    analytics_scroll.pack(side='right', fill='y')
+    txt_an = tk.Text(tab_an, width=100, height=16, wrap="word", relief='flat', bd=0)
+    txt_an.pack(fill="both", expand=True, pady=8)
     text_widgets.append(txt_an)
-    scrollbar_widgets.append(analytics_scroll)
 
     def run_analytics():
         try:
@@ -776,7 +728,7 @@ def main(config_path: Optional[str] = None):
                 lines.append(f"  {row}")
             hs = health_score(db, user_var.get().strip() or default_user, w, h, days=7)
             lines.append(f"Health Score (7d): {hs}")
-            update_text_widget(txt_an, "\n".join(lines))
+            txt_an.delete('1.0', tk.END); txt_an.insert(tk.END, "\n".join(lines))
         except Exception as e:
             messagebox.showerror("Error", str(e))
     ttk.Button(tab_an, text="Run Analytics", style='Accent.TButton', command=run_analytics).pack(anchor="w")
