@@ -1,9 +1,0 @@
-{
-  "app_name": "NovaFit Plus CLI",
-  "db_path": "data/novafit_plus.db",
-  "export_dir": "exports",
-  "default_city": "Beersheba",
-  "default_country": "Israel",
-  "units": "metric",
-  "days_of_history": 30
-}
