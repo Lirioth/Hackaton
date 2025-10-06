@@ -202,6 +202,29 @@ def main(config_path: Optional[str] = None):
         style.configure('Card.TFrame', background=palette['card_bg'])
         style.configure('CardTitle.TLabel', background=palette['card_bg'], foreground=palette['muted'], font=subtitle_font)
         style.configure('CardValue.TLabel', background=palette['card_bg'], foreground=palette['accent'], font=metric_font)
+        light_field_bg = '#ffffff'
+        light_field_fg = '#1f2933'
+        entry_field_bg = palette['panel_bg'] if theme_state['mode'] == 'dark' else light_field_bg
+        entry_field_fg = palette['fg'] if theme_state['mode'] == 'dark' else light_field_fg
+        insert_color = palette['fg'] if theme_state['mode'] == 'dark' else light_field_fg
+        disabled_field_bg = palette['status_bg']
+        disabled_field_fg = palette['muted']
+        style.configure('TEntry', fieldbackground=entry_field_bg, foreground=entry_field_fg, insertcolor=insert_color)
+        style.configure('TCombobox', fieldbackground=entry_field_bg, foreground=entry_field_fg, background=entry_field_bg, insertcolor=insert_color)
+        style.configure('TSpinbox', fieldbackground=entry_field_bg, foreground=entry_field_fg, background=entry_field_bg, insertcolor=insert_color)
+        style.map('TEntry', fieldbackground=[('disabled', disabled_field_bg)], foreground=[('disabled', disabled_field_fg)])
+        style.map(
+            'TCombobox',
+            fieldbackground=[('disabled', disabled_field_bg)],
+            background=[('disabled', disabled_field_bg)],
+            foreground=[('disabled', disabled_field_fg)],
+        )
+        style.map(
+            'TSpinbox',
+            fieldbackground=[('disabled', disabled_field_bg)],
+            background=[('disabled', disabled_field_bg)],
+            foreground=[('disabled', disabled_field_fg)],
+        )
         card_palettes = palette.get('cards', {})
         for card_key, card_palette in card_palettes.items():
             style_prefix = card_key.capitalize()
