@@ -111,6 +111,7 @@ def main(config_path: Optional[str] = None):
     }
     text_widgets = []
     status_widgets = []
+    gauge_widgets = {}
     theme_state = {'mode': 'light'}
 
     def apply_theme(mode: str = 'light'):
@@ -140,6 +141,15 @@ def main(config_path: Optional[str] = None):
             txt.configure(bg=palette['panel_bg'], fg=palette['fg'], insertbackground=palette['fg'])
         for status in status_widgets:
             status.configure(bg=palette['status_bg'], fg=palette['muted'])
+        for gauge_key, gauge in gauge_widgets.items():
+            canvas = gauge['canvas']
+            canvas.configure(bg=palette['panel_bg'], highlightbackground=palette['panel_bg'])
+            canvas.itemconfig(gauge['bg'], outline=palette['status_bg'])
+            canvas.itemconfig(
+                gauge['arc'],
+                outline=palette.get(gauge['palette_key'], palette['accent'])
+            )
+            canvas.itemconfig(gauge['text'], fill=palette['fg'])
 
     def switch_theme():
         apply_theme('dark' if theme_state['mode'] == 'light' else 'light')
@@ -231,29 +241,42 @@ def main(config_path: Optional[str] = None):
 
     metrics_frame = ttk.Frame(tab_dash, style='Panel.TFrame')
     metrics_frame.pack(fill="x", pady=4)
-    hyd_frame = ttk.Frame(metrics_frame, style='Panel.TFrame')
-    hyd_frame.pack(fill="x")
-    ttk.Label(hyd_frame, text="Hydration % (today)", style='PanelHeading.TLabel').pack(side="left", padx=6)
-    pb = ttk.Progressbar(hyd_frame, maximum=100, length=300, style='Accent.Horizontal.TProgressbar')
-    pb.pack(side="left", padx=6)
-    lbl_pb = ttk.Label(hyd_frame, text="0%", style='PanelBody.TLabel')
-    lbl_pb.pack(side="left", padx=6)
+    def _create_gauge_row(frame: ttk.Frame, title: str, key: str, palette_key: str, maximum: int, initial: str):
+        row = ttk.Frame(frame, style='Panel.TFrame')
+        row.pack(fill="x", pady=4)
+        ttk.Label(row, text=title, style='PanelHeading.TLabel').pack(side="left", padx=6)
+        canvas = tk.Canvas(row, width=96, height=96, highlightthickness=0, bd=0)
+        canvas.pack(side="left", padx=6, pady=4)
+        bbox = (8, 8, 88, 88)
+        bg_ring = canvas.create_oval(*bbox, width=10, outline="#d1d5db")
+        arc = canvas.create_arc(*bbox, start=90, extent=0, width=10, style='arc', outline="#3b82f6")
+        text_item = canvas.create_text(48, 48, text=initial, font=metric_font, fill="#1f2933")
+        value_label = ttk.Label(row, text=initial, style='PanelBody.TLabel')
+        value_label.pack(side="left", padx=6)
+        gauge_widgets[key] = {
+            'canvas': canvas,
+            'arc': arc,
+            'text': text_item,
+            'bg': bg_ring,
+            'label': value_label,
+            'max': maximum,
+            'palette_key': palette_key,
+        }
 
-    sleep_frame = ttk.Frame(metrics_frame, style='Panel.TFrame')
-    sleep_frame.pack(fill="x", pady=4)
-    ttk.Label(sleep_frame, text="Weekly Sleep % (vs 8h)", style='PanelHeading.TLabel').pack(side="left", padx=6)
-    sleep_pb = ttk.Progressbar(sleep_frame, maximum=120, length=300, style='Sleep.Horizontal.TProgressbar')
-    sleep_pb.pack(side="left", padx=6)
-    lbl_sleep = ttk.Label(sleep_frame, text="0%", style='PanelBody.TLabel')
-    lbl_sleep.pack(side="left", padx=6)
+    _create_gauge_row(metrics_frame, "Hydration % (today)", 'hydration', 'accent', 100, "0%")
+    _create_gauge_row(metrics_frame, "Weekly Sleep % (vs 8h)", 'sleep', 'sleep', 120, "0%")
+    _create_gauge_row(metrics_frame, "Health Score (7d)", 'health', 'health', 100, "--")
 
-    score_frame = ttk.Frame(metrics_frame, style='Panel.TFrame')
-    score_frame.pack(fill="x", pady=4)
-    ttk.Label(score_frame, text="Health Score (7d)", style='PanelHeading.TLabel').pack(side="left", padx=6)
-    health_pb = ttk.Progressbar(score_frame, maximum=100, length=240, style='Health.Horizontal.TProgressbar')
-    health_pb.pack(side="left", padx=6)
-    lbl_score = ttk.Label(score_frame, text="--", style='PanelBody.TLabel')
-    lbl_score.pack(side="left", padx=6)
+    def update_gauge(key: str, value: float, display_text: str, label_text: Optional[str] = None):
+        gauge = gauge_widgets.get(key)
+        if not gauge:
+            return
+        max_value = gauge.get('max', 100) or 100
+        clamped = max(0, min(value, max_value))
+        extent = -360 * (clamped / max_value)
+        gauge['canvas'].itemconfig(gauge['arc'], extent=extent)
+        gauge['canvas'].itemconfig(gauge['text'], text=display_text)
+        gauge['label'].config(text=label_text or display_text)
 
     btns = ttk.Frame(tab_dash, style='Panel.TFrame')
     btns.pack(fill="x", pady=6)
@@ -284,8 +307,7 @@ def main(config_path: Optional[str] = None):
         dash_text.delete("1.0", tk.END)
         dash_text.insert(tk.END, text)
         pct = 0 if goal <= 0 else int(total * 100 / goal)
-        pb["value"] = min(pct, 100)
-        lbl_pb.config(text=f"{pct}%")
+        update_gauge('hydration', pct, f"{pct}%")
         hydration_summary_var.set(
             f"{pct}% • {total} ml / {goal} ml" if goal > 0 else f"{total} ml logged"
         )
@@ -298,8 +320,7 @@ def main(config_path: Optional[str] = None):
 
         w7 = sleep_stats(db, user_name, days=7)
         sleep_pct = int(w7["percent_vs_8h"]) if w7 else 0
-        sleep_pb["value"] = min(sleep_pct, 120)
-        lbl_sleep.config(text=f"{sleep_pct}%")
+        update_gauge('sleep', sleep_pct, f"{sleep_pct}%")
         avg_sleep = w7.get("avg_hours", 0) if w7 else 0
         sleep_summary_var.set(f"{sleep_pct}% • avg {avg_sleep} h")
         if sleep_pct >= 100:
@@ -313,8 +334,7 @@ def main(config_path: Optional[str] = None):
         _, name, _, _, h, w, _, city, _ = u
         hs = health_score(db, user_name, w, h, days=7)
         score_val = int(hs.get('score', 0))
-        health_pb['value'] = score_val
-        lbl_score.config(text=f"{score_val}")
+        update_gauge('health', score_val, f"{score_val}", f"{score_val} pts")
         score_summary_var.set(f"{score_val} pts / 100")
         components = hs.get('components', {})
         score_breakdown_var.set(
