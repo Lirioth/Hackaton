@@ -5,7 +5,10 @@ from typing import Dict, List
 
 import matplotlib
 
-matplotlib.use('Agg')  # headless
+# Ensure headless backend only when needed 🧪
+if not os.environ.get("MPLBACKEND"):
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("NOVAFIT_HEADLESS") or not os.environ.get("DISPLAY"):
+        matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
