@@ -17,7 +17,7 @@ from .ui_enhancements import (
     setup_auto_refresh, create_modern_button, create_info_panel
 )
 from .db import get_user, daily_water_total, add_water_intake, weather_on_date, insert_weather, upsert_activity, upsert_user, tail
-from .db import migrate_schema, sleep_on_date, get_conn
+from .db import migrate_schema, sleep_on_date, get_conn, reset_to_default, get_data_summary, steps_on_date, get_all_users
 from .profile import bmi, bmr_mifflin, maintenance_calories
 from .hydration import daily_water_goal_ml
 from . import weather as wz
@@ -422,7 +422,49 @@ def main(config_path: Optional[str] = None):
     top_dash = ttk.Frame(tab_dash, style='Panel.TFrame')
     top_dash.pack(fill="x")
     ttk.Label(top_dash, text="User:", style='PanelHeading.TLabel').pack(side="left")
-    ttk.Entry(top_dash, textvariable=user_var, width=20).pack(side="left", padx=6)
+    
+    # User selector with dropdown
+    def update_user_list():
+        """Update the user selector with available users"""
+        try:
+            users = get_all_users(db)
+            current_value = user_var.get()
+            user_selector['values'] = users
+            
+            # If current value is not in the list, add it
+            if current_value and current_value not in users:
+                user_selector['values'] = [current_value] + users
+        except Exception:
+            user_selector['values'] = [user_var.get() or default_user]
+    
+    def on_user_change(event=None):
+        """Handle user selection change"""
+        new_user = user_selector.get().strip()
+        if new_user:
+            user_var.set(new_user)
+            refresh_dashboard()
+            generate_insights()
+            # Update gamification if available
+            try:
+                if 'gamification_engine' in locals():
+                    gamification_engine.user_name = new_user
+                    if hasattr(gamification_widget, 'update_display'):
+                        gamification_widget.update_display()
+            except:
+                pass
+    
+    user_selector = ttk.Combobox(top_dash, textvariable=user_var, width=18)
+    user_selector.pack(side="left", padx=6)
+    user_selector.bind('<<ComboboxSelected>>', on_user_change)
+    user_selector.bind('<Return>', on_user_change)
+    
+    # Refresh button for user list
+    ttk.Button(top_dash, text="🔄", width=3, 
+              command=update_user_list).pack(side="left", padx=2)
+    add_tooltip(top_dash.winfo_children()[-1], "Refresh user list")
+    
+    # Initial user list update
+    update_user_list()
 
     dash_split = ttk.Panedwindow(tab_dash, orient='horizontal')
     dash_split.pack(fill="both", expand=True, pady=10)
@@ -1380,6 +1422,11 @@ def main(config_path: Optional[str] = None):
             activity = (actl_var.get().strip() or "light").lower()
             city_val = city_prof_var.get().strip()
             country_val = country_prof_var.get().strip()
+            
+            # Get current user city before updating to detect changes
+            current_user = get_user(db, name) or _default_profile(name)
+            current_city = current_user[7] if current_user and len(current_user) > 7 else ""
+            
             upsert_user(db, name, age, sex, height, weight, activity, city_val, country_val)
             user_var.set(name)
             actl_var.set(activity)
@@ -1400,7 +1447,7 @@ def main(config_path: Optional[str] = None):
             refresh_dashboard()
             
             # Force immediate weather fetch for new city if different
-            if city_val and city_val != (init_city or cfg.get("default_city", "")):
+            if city_val and city_val != current_city:
                 show_toast(root, f"Updating weather for {city_val}...", "info", 3000)
                 # Trigger weather fetch in background
                 def delayed_weather_fetch():
@@ -1723,6 +1770,178 @@ def main(config_path: Optional[str] = None):
         command=open_goals_manager,
         style='Accent.TButton'
     ).pack(anchor="w", pady=(0, 5))
+    
+    # 🔴 Reset Application section
+    reset_section = ttk.LabelFrame(
+        advanced_scrollable_frame,
+        text="🔴 Reset Application",
+        padding=10
+    )
+    reset_section.pack(fill="x", pady=10)
+    
+    ttk.Label(
+        reset_section,
+        text="⚠️ Danger Zone: Reset all application data",
+        style='PanelHeading.TLabel',
+        foreground='red'
+    ).pack(anchor="w", pady=(0, 5))
+    
+    ttk.Label(
+        reset_section,
+        text="This will permanently delete ALL data and reset the application to its initial state.",
+        style='PanelBody.TLabel'
+    ).pack(anchor="w", pady=(0, 10))
+    
+    # Data summary frame
+    data_summary_frame = ttk.Frame(reset_section, style='Panel.TFrame')
+    data_summary_frame.pack(fill="x", pady=(0, 10))
+    
+    data_summary_labels = {}
+    
+    def update_data_summary():
+        """Update the data summary display"""
+        try:
+            summary = get_data_summary(db)
+            for key, value in summary.items():
+                if key in data_summary_labels:
+                    data_summary_labels[key].config(text=f"{value}")
+        except Exception:
+            pass
+    
+    # Create data summary display
+    summary_info = [
+        ("Users", "users"),
+        ("Activities", "activities"),
+        ("Weather Records", "weather"),
+        ("Water Intake Records", "water_intake")
+    ]
+    
+    for i, (label, key) in enumerate(summary_info):
+        row_frame = ttk.Frame(data_summary_frame, style='Panel.TFrame')
+        row_frame.pack(fill="x", pady=2)
+        
+        ttk.Label(row_frame, text=f"{label}:", style='PanelBody.TLabel').pack(side="left")
+        data_summary_labels[key] = ttk.Label(row_frame, text="0", style='PanelBody.TLabel')
+        data_summary_labels[key].pack(side="right")
+    
+    # Update data summary initially
+    update_data_summary()
+    
+    def confirm_reset():
+        """Show simple Yes/No confirmation dialog and reset if confirmed"""
+        update_data_summary()
+        
+        # Check if there's any data
+        summary = get_data_summary(db)
+        total_records = sum(summary.values())
+        
+        if total_records == 0:
+            show_toast(root, "Database is already empty.", "info")
+            return
+        
+        # Create data summary message
+        data_info = []
+        for label, key in summary_info:
+            count = summary[key]
+            if count > 0:
+                data_info.append(f"• {count} {label}")
+        
+        data_text = "\n".join(data_info)
+        
+        # Use standard messagebox for reliable Yes/No confirmation
+        import tkinter.messagebox as msgbox
+        
+        message = f"""⚠️ RESET APPLICATION DATA
+
+This will PERMANENTLY DELETE all data:
+
+{data_text}
+
+⚠️ This action cannot be undone!
+
+Are you absolutely sure you want to reset the application?"""
+        
+        # Show Yes/No dialog
+        result = msgbox.askyesno(
+            "⚠️ Confirm Reset", 
+            message,
+            icon='warning',
+            default='no'
+        )
+        
+        if result:  # User clicked YES
+            # Show progress
+            show_toast(root, "Resetting application...", "info", 2000)
+            
+            try:
+                # Reset database
+                reset_to_default(db)
+                
+                # Clear cache files
+                import os
+                cache_files = ["weather_cache.json", "gamification_Kevin.json"]
+                for cache_file in cache_files:
+                    if os.path.exists(cache_file):
+                        try:
+                            os.remove(cache_file)
+                        except:
+                            pass
+                
+                # Update data summary
+                update_data_summary()
+                
+                # Reset user variable to default
+                user_var.set("Kevin")
+                
+                # Update user list if function is available
+                try:
+                    update_user_list()
+                except NameError:
+                    # Function not in scope, update combobox directly
+                    try:
+                        user_selector['values'] = ["Kevin"]
+                    except:
+                        pass
+                
+                # Refresh dashboard
+                refresh_dashboard()
+                
+                # Show success
+                show_smart_toast(
+                    root,
+                    "Application Reset Complete! 🎉",
+                    "All data has been cleared. You can now start fresh with a new profile.",
+                    "success",
+                    duration=5000
+                )
+                
+                # Switch to profile tab to encourage user to set up
+                nb.select(tab_prof)
+                
+            except Exception as e:
+                show_toast(root, f"Reset failed: {str(e)}", "error")
+        else:  # User clicked NO or cancelled
+            show_toast(root, "Reset cancelled.", "info")
+    
+    # Reset buttons
+    button_frame = ttk.Frame(reset_section, style='Panel.TFrame')
+    button_frame.pack(fill="x", pady=(0, 5))
+    
+    ttk.Button(
+        button_frame,
+        text="🔄 Refresh Data Summary",
+        command=update_data_summary
+    ).pack(side="left")
+    
+    ttk.Button(
+        button_frame,
+        text="🗑️ Reset Application",
+        command=confirm_reset,
+        style='Accent.TButton'
+    ).pack(side="right")
+    
+    add_tooltip(button_frame.winfo_children()[0], "Update the data summary counts")
+    add_tooltip(button_frame.winfo_children()[1], "⚠️ Permanently delete ALL application data")
     
     # Auto-update gamification data
     def update_gamification():

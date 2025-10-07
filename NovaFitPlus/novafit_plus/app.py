@@ -1,6 +1,6 @@
 from .utils import load_config, today_iso, clamp, print_box, ascii_bar
 from .db import init_db, upsert_user, get_user, upsert_activity, insert_weather, tail, migrate_schema, sleep_on_date, InvalidTableError
-from .db import daily_water_total, weather_on_date
+from .db import daily_water_total, weather_on_date, reset_to_default, get_data_summary
 from . import weather as wz
 from .profile import bmi, bmr_mifflin, maintenance_calories
 from .hydration import add_intake, hydration_progress, daily_water_goal_ml
@@ -199,6 +199,52 @@ def do_export(db, cfg, user_name):
     out_xlsx = export_excel(db, cfg["export_dir"], user_name, days=14)
     print(f"Export ready: {out_json} | {out_xlsx}")
 
+def do_reset(db):
+    """Handle application reset with confirmation"""
+    print_box("Reset Application")
+    
+    # Show current data summary
+    summary = get_data_summary(db)
+    print("Current data in database:")
+    print(f"  Users: {summary['users']}")
+    print(f"  Activities: {summary['activities']}")
+    print(f"  Weather records: {summary['weather']}")
+    print(f"  Water intake records: {summary['water_intake']}")
+    print()
+    
+    if summary['users'] == 0 and summary['activities'] == 0 and summary['weather'] == 0 and summary['water_intake'] == 0:
+        print("✅ Database is already empty.")
+        return
+    
+    print("⚠️  WARNING: This will PERMANENTLY DELETE all data!")
+    print("   - All user profiles")
+    print("   - All activity logs")
+    print("   - All weather data")
+    print("   - All water intake records")
+    print()
+    
+    confirmation = input("Type 'RESET' to confirm deletion (or anything else to cancel): ").strip()
+    
+    if confirmation == "RESET":
+        print("\n🗑️  Deleting all data...")
+        reset_to_default(db)
+        print("✅ Application reset completed!")
+        print("💡 You can now start fresh with a new profile.")
+        
+        # Clear cache files if they exist
+        import os
+        cache_files = ["weather_cache.json", "gamification_Kevin.json"]
+        for cache_file in cache_files:
+            if os.path.exists(cache_file):
+                try:
+                    os.remove(cache_file)
+                    print(f"🧹 Cleared cache file: {cache_file}")
+                except:
+                    pass
+        
+    else:
+        print("❌ Reset cancelled. No data was deleted.")
+
 def menu(config_path: Optional[str] = None):
     cfg = load_config(config_path)
     db = cfg["db_path"]
@@ -227,8 +273,9 @@ def menu(config_path: Optional[str] = None):
         print("7) Export JSON + Excel")
         print("8) Seed demo data")
         print("9) Tail last rows")
+        print("R) Reset application (DELETE ALL DATA)")
         print("0) Exit")
-        op = input("\nChoose: ").strip()
+        op = input("\nChoose: ").strip().upper()
 
         if op == "1":
             user_name = onboarding(db, default_name=user_name)
@@ -258,6 +305,10 @@ def menu(config_path: Optional[str] = None):
                     print(tail(db, tbl, 5))
                 except InvalidTableError as err:
                     print(f"Table error: {err}")
+        elif op == "R":
+            do_reset(db)
+            # After reset, user needs to create profile again
+            user_name = onboarding(db, default_name=default)
         elif op == "0":
             print("Goodbye.")
             break

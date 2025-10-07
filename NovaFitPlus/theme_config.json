@@ -5,7 +5,7 @@
     "dark_start": "18:00"
   },
   "follow_system": true,
-  "manual_override": false,
+  "manual_override": true,
   "last_manual_theme": "light",
   "transition_enabled": true,
   "transition_duration": 2000

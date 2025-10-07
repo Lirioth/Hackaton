@@ -189,6 +189,13 @@ def get_user(db_path: str, name: str):
         )
         return cur.fetchone()
 
+def get_all_users(db_path: str):
+    """Get list of all user names in the database"""
+    with get_conn(db_path) as c:
+        cur = c.cursor()
+        cur.execute("SELECT name FROM users ORDER BY name")
+        return [row[0] for row in cur.fetchall()]
+
 def upsert_activity(db_path: str, user_name: str, date: str, steps: int, calories: int, mood: int, notes: str, sleep_hours: float):
     with get_conn(db_path) as c:
         cur = c.cursor()
@@ -315,3 +322,68 @@ def tail(db_path: str, table: str, n: int = 5):
         cur = c.cursor()
         cur.execute(sql, (n,))
         return cur.fetchall()
+
+def reset_to_default(db_path_or_conn):
+    """Reset application to default state by clearing all user data
+    
+    Args:
+        db_path_or_conn: Either a database path (str) or a database connection
+    """
+    if isinstance(db_path_or_conn, str):
+        # It's a database path
+        with get_conn(db_path_or_conn) as c:
+            _reset_database_conn(c)
+        # Vacuum outside of transaction
+        with get_conn(db_path_or_conn) as c:
+            c.execute("VACUUM")
+    else:
+        # It's a database connection - reset directly
+        _reset_database_conn(db_path_or_conn)
+
+def _reset_database_conn(c):
+    """Internal function to reset database using a connection"""
+    cur = c.cursor()
+    # Clear all tables in the correct order (foreign key constraints)
+    cur.execute("DELETE FROM water_intake")
+    cur.execute("DELETE FROM activities") 
+    cur.execute("DELETE FROM weather")
+    cur.execute("DELETE FROM users")
+    # Reset auto-increment counters
+    cur.execute("DELETE FROM sqlite_sequence WHERE name IN ('users', 'activities', 'weather', 'water_intake')")
+
+def get_data_summary(db_path_or_conn):
+    """Get summary of data in the database
+    
+    Args:
+        db_path_or_conn: Either a database path (str) or a database connection
+    """
+    if isinstance(db_path_or_conn, str):
+        # It's a database path
+        with get_conn(db_path_or_conn) as c:
+            return _get_data_summary_from_conn(c)
+    else:
+        # It's a database connection
+        return _get_data_summary_from_conn(db_path_or_conn)
+
+def _get_data_summary_from_conn(c):
+    """Internal function to get data summary from a connection"""
+    cur = c.cursor()
+    summary = {}
+    
+    # Count users
+    cur.execute("SELECT COUNT(*) FROM users")
+    summary['users'] = cur.fetchone()[0]
+    
+    # Count activities
+    cur.execute("SELECT COUNT(*) FROM activities")
+    summary['activities'] = cur.fetchone()[0]
+    
+    # Count weather records
+    cur.execute("SELECT COUNT(*) FROM weather")
+    summary['weather'] = cur.fetchone()[0]
+    
+    # Count water intake records
+    cur.execute("SELECT COUNT(*) FROM water_intake")
+    summary['water_intake'] = cur.fetchone()[0]
+    
+    return summary
