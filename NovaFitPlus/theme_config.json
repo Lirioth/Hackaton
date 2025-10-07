@@ -1,0 +1,12 @@
+{
+  "mode": "dark",
+  "auto_schedule": {
+    "light_start": "06:00",
+    "dark_start": "18:00"
+  },
+  "follow_system": true,
+  "manual_override": false,
+  "last_manual_theme": "light",
+  "transition_enabled": true,
+  "transition_duration": 2000
+}

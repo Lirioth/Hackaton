@@ -1,0 +1,158 @@
+{
+  "user_profile": {
+    "total_points": 160,
+    "level": 2,
+    "current_streak": 1,
+    "longest_streak": 1,
+    "achievements_unlocked": 3,
+    "goals_completed": 0,
+    "last_activity_date": "2025-10-06"
+  },
+  "goals": {},
+  "achievements": {
+    "hydro_novice": {
+      "id": "hydro_novice",
+      "title": "Hydration Novice",
+      "description": "Drink 2L of water in one day",
+      "icon": "\ud83d\udca7",
+      "tier": "bronze",
+      "points": 50,
+      "unlock_condition": "Drink 2000ml in a single day",
+      "is_unlocked": true,
+      "unlock_date": "2025-10-06",
+      "progress": 0.0
+    },
+    "hydro_master": {
+      "id": "hydro_master",
+      "title": "Hydration Master",
+      "description": "Maintain hydration goals for 7 days",
+      "icon": "\ud83c\udf0a",
+      "tier": "silver",
+      "points": 100,
+      "unlock_condition": "Meet hydration goal 7 days in a row",
+      "is_unlocked": false,
+      "unlock_date": null,
+      "progress": 0.0
+    },
+    "hydro_legend": {
+      "id": "hydro_legend",
+      "title": "Hydration Legend",
+      "description": "30 day hydration streak",
+      "icon": "\u26f2",
+      "tier": "gold",
+      "points": 250,
+      "unlock_condition": "Meet hydration goal 30 days in a row",
+      "is_unlocked": false,
+      "unlock_date": null,
+      "progress": 0.0
+    },
+    "walker": {
+      "id": "walker",
+      "title": "Daily Walker",
+      "description": "Walk 10,000 steps in one day",
+      "icon": "\ud83d\udeb6",
+      "tier": "bronze",
+      "points": 50,
+      "unlock_condition": "Reach 10,000 steps in a single day",
+      "is_unlocked": true,
+      "unlock_date": "2025-10-06",
+      "progress": 0.0
+    },
+    "marathoner": {
+      "id": "marathoner",
+      "title": "Marathon Walker",
+      "description": "Walk 50,000 steps in one week",
+      "icon": "\ud83c\udfc3",
+      "tier": "silver",
+      "points": 150,
+      "unlock_condition": "Accumulate 50,000 steps in 7 days",
+      "is_unlocked": false,
+      "unlock_date": null,
+      "progress": 0.0
+    },
+    "step_master": {
+      "id": "step_master",
+      "title": "Step Master",
+      "description": "Maintain 10k+ steps for 30 days",
+      "icon": "\ud83d\udc51",
+      "tier": "gold",
+      "points": 300,
+      "unlock_condition": "10,000+ steps for 30 consecutive days",
+      "is_unlocked": false,
+      "unlock_date": null,
+      "progress": 0.0
+    },
+    "well_rested": {
+      "id": "well_rested",
+      "title": "Well Rested",
+      "description": "Get 8+ hours of sleep",
+      "icon": "\ud83d\ude34",
+      "tier": "bronze",
+      "points": 40,
+      "unlock_condition": "Sleep 8 or more hours in one night",
+      "is_unlocked": false,
+      "unlock_date": null,
+      "progress": 0.0
+    },
+    "sleep_champion": {
+      "id": "sleep_champion",
+      "title": "Sleep Champion",
+      "description": "Consistent 8h sleep for a week",
+      "icon": "\ud83d\udecc",
+      "tier": "silver",
+      "points": 120,
+      "unlock_condition": "8+ hours sleep for 7 consecutive nights",
+      "is_unlocked": false,
+      "unlock_date": null,
+      "progress": 0.0
+    },
+    "healthy_start": {
+      "id": "healthy_start",
+      "title": "Healthy Start",
+      "description": "Achieve 70+ health score",
+      "icon": "\u2764\ufe0f",
+      "tier": "bronze",
+      "points": 60,
+      "unlock_condition": "Reach a health score of 70 or higher",
+      "is_unlocked": true,
+      "unlock_date": "2025-10-06",
+      "progress": 0.0
+    },
+    "health_guru": {
+      "id": "health_guru",
+      "title": "Health Guru",
+      "description": "Achieve 90+ health score",
+      "icon": "\ud83d\udcaa",
+      "tier": "gold",
+      "points": 200,
+      "unlock_condition": "Reach a health score of 90 or higher",
+      "is_unlocked": false,
+      "unlock_date": null,
+      "progress": 0.0
+    },
+    "consistent": {
+      "id": "consistent",
+      "title": "Consistency King",
+      "description": "7 day activity streak",
+      "icon": "\ud83d\udd25",
+      "tier": "silver",
+      "points": 100,
+      "unlock_condition": "Log activity for 7 consecutive days",
+      "is_unlocked": false,
+      "unlock_date": null,
+      "progress": 0.0
+    },
+    "unstoppable": {
+      "id": "unstoppable",
+      "title": "Unstoppable",
+      "description": "30 day activity streak",
+      "icon": "\u26a1",
+      "tier": "platinum",
+      "points": 500,
+      "unlock_condition": "Log activity for 30 consecutive days",
+      "is_unlocked": false,
+      "unlock_date": null,
+      "progress": 0.0
+    }
+  }
+}
